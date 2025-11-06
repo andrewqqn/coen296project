@@ -1,10 +1,13 @@
-# Flask API Service Starter
 
-This is a minimal Flask API service starter based on [Google Cloud Run Quickstart](https://cloud.google.com/run/docs/quickstarts/build-and-deploy/deploy-python-service).
+pip freeze > requirements.txt
 
-## Getting Started
+gcloud builds submit --tag gcr.io/expensense-8110a/expense-back
 
-Server should run automatically when starting a workspace. To run manually, run:
-```sh
-./devserver.sh
-```
+gcloud run deploy expense-back \
+  --image gcr.io/expensense-8110a/expense-back \
+  --region us-central1 \
+  --platform managed \
+  --allow-unauthenticated \
+  --service-account expense-back-sa@expensense-8110a.iam.gserviceaccount.com \
+  --set-env-vars GCLOUD_PROJECT=expensense-8110a,STORAGE_BUCKET=expensense-8110a.firebasestorage.app \
+  --set-secrets FIREBASE_API_KEY=FIREBASE_API_KEY:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest
