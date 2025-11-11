@@ -4,14 +4,13 @@ from typing import List, Optional, Literal
 
 @dataclass
 class Employee:
+    authentication_id: str
+    employee_id: str
     email: str
-
-    uid: str
     name: str
-    position: str
-    department: str
 
-    manager_id: Optional[str] = None
+    position: str
+
     role: Literal["employee", "admin"] = "employee"
 
     bank_account: Optional[str] = None

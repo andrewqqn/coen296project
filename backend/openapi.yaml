@@ -275,12 +275,11 @@ components:
     Employee:
       type: object
       properties:
+        authentication_id: { type: string }
         employee_id: { type: string }
+        email: { type: string }
         name: { type: string }
         position: { type: string }
-        department: { type: string }
-        email: { type: string }
-        manager_id: { type: string, nullable: true }
         role: { type: string, enum: ["employee", "admin"] }
         bank_account: { type: string, nullable: true }
         notes: { type: string, nullable: true }

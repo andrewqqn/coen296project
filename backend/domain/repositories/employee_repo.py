@@ -7,11 +7,12 @@ def get(emp_id: str):
     return doc.to_dict() | {"employee_id": doc.id} if doc.exists else None
 def create(data: dict):
     ref = db.collection(COLLECTION).document()
+    data["employee_id"] = ref.id
     ref.set(data)
-    return get(ref.id)
+    return {"create": True, "employee_id": ref.id}
 def update(emp_id: str, data: dict):
     db.collection(COLLECTION).document(emp_id).update(data)
-    return get(emp_id)
+    return {"update": True, "employee_id": emp_id}
 def delete(emp_id: str):
     db.collection(COLLECTION).document(emp_id).delete()
     return {"deleted": True, "employee_id": emp_id}

@@ -10,4 +10,4 @@ data = {
 }
 
 r = requests.post(url, json=data)
-print(r.json()['idToken'])
+print(r.json())
