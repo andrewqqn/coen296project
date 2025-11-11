@@ -2,11 +2,8 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow writes to the 'invoices' folder for any authenticated user
-    match /invoices/{fileName} {
-      allow write: if request.auth != null;
-      // Read access on the objects is public because the backend code
-      // calls `make_public()`. No `allow read` rule is required for this.
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }

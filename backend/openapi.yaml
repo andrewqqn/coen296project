@@ -1,0 +1,325 @@
+openapi: 3.0.3
+info:
+  title: Expense Reimbursement System API
+  version: 1.0.0
+  description: >
+    Secure API for managing Employees, Expenses, Policies, and Audit Logs.  
+    🔒 All endpoints require a valid Firebase ID token obtained after Google Sign-In.
+
+servers:
+  - url: https://localhost:8081/api/v1
+    description: Local test server
+
+security:
+  - firebaseAuth: []
+
+tags:
+  - name: Employee
+    description: Manage employee information
+  - name: Expense
+    description: Submit and track expenses
+  - name: Policy
+    description: Define and update reimbursement policies
+  - name: AuditLog
+    description: System activity logs for auditing
+
+paths:
+
+  ###########################
+  # Employee Section
+  ###########################
+  /employees:
+    get:
+      tags: [Employee]
+      summary: List all employees
+      responses:
+        '200':
+          description: List of employees
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Employee'
+    post:
+      tags: [Employee]
+      summary: Create new employee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Employee'
+      responses:
+        '201':
+          description: Employee created
+
+  /employees/{employee_id}:
+    get:
+      tags: [Employee]
+      summary: Get employee by ID
+      parameters:
+        - name: employee_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Employee details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Employee'
+    patch:
+      tags: [Employee]
+      summary: Update employee info
+      parameters:
+        - name: employee_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Employee'
+      responses:
+        '200':
+          description: Employee updated
+    delete:
+      tags: [Employee]
+      summary: Delete employee
+      parameters:
+        - name: employee_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Employee deleted
+
+  ###########################
+  # Expense Section
+  ###########################
+  /expenses:
+    get:
+      tags: [Expense]
+      summary: List all expenses
+      responses:
+        '200':
+          description: List of expenses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Expense'
+    post:
+      tags: [Expense]
+      summary: Create new expense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Expense'
+      responses:
+        '201':
+          description: Expense created
+
+  /expenses/{expense_id}:
+    get:
+      tags: [Expense]
+      summary: Get expense by ID
+      parameters:
+        - name: expense_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Expense details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+    patch:
+      tags: [Expense]
+      summary: Update expense
+      parameters:
+        - name: expense_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Expense'
+      responses:
+        '200':
+          description: Expense updated
+    delete:
+      tags: [Expense]
+      summary: Delete expense
+      parameters:
+        - name: expense_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Expense deleted
+
+  ###########################
+  # Policy Section
+  ###########################
+  /policies:
+    get:
+      tags: [Policy]
+      summary: List reimbursement policies
+      responses:
+        '200':
+          description: List of policies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReimbursementPolicy'
+    post:
+      tags: [Policy]
+      summary: Create new policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReimbursementPolicy'
+      responses:
+        '201':
+          description: Policy created
+
+  /policies/{policy_id}:
+    patch:
+      tags: [Policy]
+      summary: Update policy
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReimbursementPolicy'
+      responses:
+        '200':
+          description: Policy updated
+    delete:
+      tags: [Policy]
+      summary: Delete policy
+      parameters:
+        - name: policy_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Policy deleted
+
+  ###########################
+  # Audit Log Section
+  ###########################
+  /audit_logs:
+    get:
+      tags: [AuditLog]
+      summary: List all audit logs
+      responses:
+        '200':
+          description: List of audit logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLog'
+    post:
+      tags: [AuditLog]
+      summary: Record new audit log entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditLog'
+      responses:
+        '201':
+          description: Audit log created
+
+components:
+  securitySchemes:
+    firebaseAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: FirebaseIDToken
+      description: |
+        Paste your Firebase ID token here.
+        Example: `Bearer eyJhbGciOiJ...`
+
+  schemas:
+    Employee:
+      type: object
+      properties:
+        employee_id: { type: string }
+        name: { type: string }
+        position: { type: string }
+        department: { type: string }
+        email: { type: string }
+        manager_id: { type: string, nullable: true }
+        role: { type: string, enum: ["employee", "admin"] }
+        bank_account: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+
+    Expense:
+      type: object
+      properties:
+        expense_id: { type: string, nullable: true }
+        employee_id: { type: string }
+        amount: { type: number }
+        category: { type: string }
+        description: { type: string }
+        receipt_url: { type: string, nullable: true }
+        status: { type: string, enum: ["pending", "approved", "rejected"] }
+        decision_type: { type: string, enum: ["AI", "Human"] }
+        reviewed_by: { type: string, nullable: true }
+        decision_reason: { type: string, nullable: true }
+        submitted_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ReimbursementPolicy:
+      type: object
+      properties:
+        policy_id: { type: string, nullable: true }
+        category: { type: string }
+        max_amount: { type: number }
+        eligible_roles:
+          type: array
+          items: { type: string }
+        description: { type: string, nullable: true }
+        active: { type: boolean }
+
+    AuditLog:
+      type: object
+      properties:
+        actor: { type: string }
+        action: { type: string, enum: ["create", "update", "delete"] }
+        target_type: { type: string, enum: ["expense", "employee", "policy"] }
+        target_id: { type: string, nullable: true }
+        log_notes: { type: string }
+        action_type: { type: string }
+        timestamp: { type: string, format: date-time }
