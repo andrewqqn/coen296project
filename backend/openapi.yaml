@@ -22,6 +22,8 @@ tags:
     description: Define and update reimbursement policies
   - name: AuditLog
     description: System activity logs for auditing
+  - name: Orchestrator
+    description: Natural language query interface powered by AI
 
 paths:
 
@@ -261,6 +263,47 @@ paths:
         '201':
           description: Audit log created
 
+  ###########################
+  # Orchestrator Section
+  ###########################
+  /orchestrator/:
+    post:
+      tags: [Orchestrator]
+      summary: Process natural language query
+      description: |
+        Process a natural language query and route it to the appropriate tools.
+        The orchestrator uses GPT-4 to understand the user's intent and automatically
+        calls the necessary functions to fulfill the request.
+        
+        Examples of queries:
+        - "List all employees"
+        - "Show me the expense with ID abc123"
+        - "Create a new employee named John Doe with email john@example.com"
+        - "What are all the reimbursement policies?"
+        - "Show me recent audit logs"
+        - "Update employee emp123 to change their department to Engineering"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+      responses:
+        '200':
+          description: Query processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResponse'
+        '500':
+          description: Error processing query
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail: { type: string }
+
 components:
   securitySchemes:
     firebaseAuth:
@@ -322,3 +365,37 @@ components:
         log_notes: { type: string }
         action_type: { type: string }
         timestamp: { type: string, format: date-time }
+
+    QueryRequest:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          description: Natural language query to process
+          example: "Show me all employees"
+
+    QueryResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Whether the query was processed successfully
+        response:
+          type: string
+          nullable: true
+          description: The response to the query
+        tools_used:
+          type: array
+          items:
+            type: string
+          description: List of tools/functions used to process the query
+        query:
+          type: string
+          description: The original query that was processed
+        error:
+          type: string
+          nullable: true
+          description: Error message if the query failed
+

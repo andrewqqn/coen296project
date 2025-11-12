@@ -4,7 +4,7 @@ import requests
 url = "http://localhost:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key"
 
 data = {
-    "email": "yzeng@scu.edu",
+    "email": "anguyen21@scu.edu",
     "password": "123456",
     "returnSecureToken": True
 }

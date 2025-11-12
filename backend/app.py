@@ -1,8 +1,9 @@
 from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.openapi.models import APIKey, APIKeyIn
 from fastapi.openapi.utils import get_openapi
-from application import employee_router, expense_router, policy_router, audit_router, agent_router
+from application import employee_router, expense_router, policy_router, audit_router, agent_router, orchestrator_router
 
 security = HTTPBearer(auto_error=False)
 
@@ -17,12 +18,22 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# ✅ Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],  # Frontend origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
+)
+
 # ✅ 挂载 routers（不需要额外 Depends）
 app.include_router(employee_router.router)
 app.include_router(expense_router.router)
 app.include_router(policy_router.router)
 app.include_router(audit_router.router)
 app.include_router(agent_router.router)
+app.include_router(orchestrator_router.router)
 
 @app.get("/")
 def root():
