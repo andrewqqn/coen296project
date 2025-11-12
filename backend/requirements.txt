@@ -1,6 +1,69 @@
-fastapi
-uvicorn
-firebase-admin
-python-dotenv
-PyYAML
-openai
+annotated-types @ file:///opt/miniconda3/conda-bld/annotated-types_1761744935789/work
+anyio==4.11.0
+blinker @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_11lor_igbs/croot/blinker_1737449046432/work
+CacheControl==0.14.3
+cachetools==6.2.1
+certifi @ file:///opt/miniconda3/conda-bld/certifi_1759786064563/work/certifi
+cffi==2.0.0
+charset-normalizer==3.4.4
+click @ file:///private/var/folders/nz/j6p8yfhx1mv_0grj5xl4650h0000gp/T/abs_2bwamfk1ra/croot/click_1754477943404/work
+cryptography==46.0.3
+distro @ file:///private/var/folders/nz/j6p8yfhx1mv_0grj5xl4650h0000gp/T/abs_ddkyz0575y/croot/distro_1714488254309/work
+dnspython==2.8.0
+email-validator==2.3.0
+fastapi @ file:///opt/miniconda3/conda-bld/fastapi_1757101261228/work
+firebase_admin==7.1.0
+Flask @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_c5fr3f66m2/croot/flask_1756453130186/work
+flask-swagger-ui==5.21.0
+google-api-core==2.28.1
+google-auth==2.43.0
+google-cloud-core==2.5.0
+google-cloud-firestore==2.21.0
+google-cloud-storage==3.5.0
+google-crc32c==1.7.1
+google-resumable-media==2.7.2
+googleapis-common-protos==1.72.0
+grpcio==1.76.0
+grpcio-status==1.76.0
+h11 @ file:///opt/miniconda3/conda-bld/h11_1761931260823/work
+h2==4.3.0
+hpack==4.1.0
+httpcore @ file:///private/var/folders/nz/j6p8yfhx1mv_0grj5xl4650h0000gp/T/abs_941yf7p5zt/croot/httpcore_1748526061031/work
+httptools==0.7.1
+httpx @ file:///opt/miniconda3/conda-bld/httpx_1760447187197/work
+hyperframe==6.1.0
+idna @ file:///opt/miniconda3/conda-bld/idna_1761912005314/work
+iniconfig @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_ba93zhdgbo/croot/iniconfig_1752653743225/work
+itsdangerous @ file:///private/var/folders/nz/j6p8yfhx1mv_0grj5xl4650h0000gp/T/abs_00jdi1gu23/croot/itsdangerous_1716533346702/work
+Jinja2 @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_2cnn4kenrm/croot/jinja2_1741710859444/work
+jiter @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_f4n0iuya3b/croot/jiter_1729808946806/work
+MarkupSafe @ file:///private/var/folders/nz/j6p8yfhx1mv_0grj5xl4650h0000gp/T/abs_1f_uj4vxik/croot/markupsafe_1738584045311/work
+msgpack==1.1.2
+openai @ file:///opt/miniconda3/conda-bld/openai_1759140184618/work
+packaging @ file:///opt/miniconda3/conda-bld/packaging_1761049079066/work
+pluggy @ file:///private/var/folders/nz/j6p8yfhx1mv_0grj5xl4650h0000gp/T/abs_bei6q1cvvt/croot/pluggy_1733169621717/work
+proto-plus==1.26.1
+protobuf==6.33.0
+pyasn1==0.6.1
+pyasn1_modules==0.4.2
+pycparser==2.23
+pydantic @ file:///opt/miniconda3/conda-bld/pydantic_1762505196192/work
+pydantic_core @ file:///opt/miniconda3/conda-bld/pydantic-core_1760597287147/work
+Pygments @ file:///opt/miniconda3/conda-bld/pygments_1762431577787/work
+PyJWT==2.10.1
+pytest @ file:///opt/miniconda3/conda-bld/pytest_1758124897604/work
+python-dotenv @ file:///private/var/folders/nz/j6p8yfhx1mv_0grj5xl4650h0000gp/T/abs_0bqseadoho/croot/python-dotenv_1745610246418/work
+PyYAML==6.0.3
+requests==2.32.5
+rsa==4.9.1
+sniffio==1.3.1
+starlette @ file:///opt/miniconda3/conda-bld/starlette-recipe_1756910684229/work
+tqdm @ file:///private/var/folders/nz/j6p8yfhx1mv_0grj5xl4650h0000gp/T/abs_5642tzrprr/croot/tqdm_1738943467095/work
+typing-inspection @ file:///opt/miniconda3/conda-bld/typing-inspection_1760614169328/work
+typing_extensions @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_dffmcwqo6o/croot/typing_extensions_1756281471323/work
+urllib3==2.5.0
+uvicorn==0.38.0
+uvloop==0.22.1
+watchfiles==1.1.1
+websockets==15.0.1
+Werkzeug @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_87am5fxnsf/croot/werkzeug_1737448721856/work

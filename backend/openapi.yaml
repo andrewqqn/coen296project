@@ -1,11 +1,11 @@
+
 openapi: 3.0.3
 info:
-  title: Expense Reimbursement System API
-  version: 1.0.0
+  title: Expense Reimbursement System API (Synced Schemas)
+  version: 2.0.0
   description: >
-    Secure API for managing Employees, Expenses, Policies, and Audit Logs.  
-    🔒 All endpoints require a valid Firebase ID token obtained after Google Sign-In.
-
+    API definitions generated from current Pydantic schemas for Employee, Expense, Policy, and AuditLog.
+    All request and response bodies strictly match the Python schema definitions.
 servers:
   - url: https://localhost:8081/api/v1
     description: Local test server
@@ -13,21 +13,102 @@ servers:
 security:
   - firebaseAuth: []
 
-tags:
-  - name: Employee
-    description: Manage employee information
-  - name: Expense
-    description: Submit and track expenses
-  - name: Policy
-    description: Define and update reimbursement policies
-  - name: AuditLog
-    description: System activity logs for auditing
+components:
+  securitySchemes:
+    firebaseAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: FirebaseIDToken
+      description: |
+        Provide Firebase ID Token in the Authorization header.
+        Example: `Bearer eyJhbGciOiJ...`
+
+  schemas:
+    EmployeeCreate:
+      type: object
+      required: [authentication_id, email, name, position, role]
+      properties:
+        authentication_id: { type: string }
+        email: { type: string }
+        name: { type: string }
+        position: { type: string }
+        role: { type: string, enum: ["employee", "admin"], default: "employee" }
+        bank_account: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+
+    EmployeeOut:
+      allOf:
+        - $ref: '#/components/schemas/EmployeeCreate'
+        - type: object
+          required: [employee_id]
+          properties:
+            employee_id: { type: string }
+
+    ExpenseCreate:
+      type: object
+      required: [employee_id, amount, category]
+      properties:
+        employee_id: { type: string }
+        amount: { type: number }
+        category: { type: string }
+        description: { type: string, default: "" }
+        receipt_url: { type: string, format: uri, nullable: true }
+
+    ExpenseOut:
+      allOf:
+        - $ref: '#/components/schemas/ExpenseCreate'
+        - type: object
+          required: [expense_id, status, decision_type, submitted_at, updated_at]
+          properties:
+            expense_id: { type: string }
+            status: { type: string, enum: ["pending", "approved", "rejected"] }
+            decision_type: { type: string, enum: ["AI", "Human"] }
+            reviewed_by: { type: string, nullable: true }
+            decision_reason: { type: string, nullable: true }
+            submitted_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+
+    PolicyCreate:
+      type: object
+      required: [category, max_amount]
+      properties:
+        category: { type: string }
+        max_amount: { type: number }
+        eligible_roles:
+          type: array
+          items: { type: string }
+          default: ["employee"]
+        description: { type: string, nullable: true }
+        active: { type: boolean, default: true }
+
+    PolicyOut:
+      allOf:
+        - $ref: '#/components/schemas/PolicyCreate'
+        - type: object
+          required: [policy_id]
+          properties:
+            policy_id: { type: string }
+
+    AuditLogCreate:
+      type: object
+      required: [actor, action, target_type]
+      properties:
+        actor: { type: string }
+        action: { type: string, enum: ["create", "update", "delete"] }
+        target_type: { type: string, enum: ["expense", "employee", "policy"] }
+        target_id: { type: string, nullable: true }
+        log_notes: { type: string, nullable: true }
+        action_type: { type: string, nullable: true }
+
+    AuditLogOut:
+      allOf:
+        - $ref: '#/components/schemas/AuditLogCreate'
+        - type: object
+          required: [timestamp]
+          properties:
+            timestamp: { type: string, format: date-time }
 
 paths:
-
-  ###########################
-  # Employee Section
-  ###########################
   /employees:
     get:
       tags: [Employee]
@@ -40,7 +121,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Employee'
+                  $ref: '#/components/schemas/EmployeeOut'
     post:
       tags: [Employee]
       summary: Create new employee
@@ -49,10 +130,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Employee'
+              $ref: '#/components/schemas/EmployeeCreate'
       responses:
         '201':
           description: Employee created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeOut'
 
   /employees/{employee_id}:
     get:
@@ -69,7 +154,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Employee'
+                $ref: '#/components/schemas/EmployeeOut'
     patch:
       tags: [Employee]
       summary: Update employee info
@@ -83,25 +168,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Employee'
+              $ref: '#/components/schemas/EmployeeCreate'
       responses:
         '200':
           description: Employee updated
-    delete:
-      tags: [Employee]
-      summary: Delete employee
-      parameters:
-        - name: employee_id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '204':
-          description: Employee deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeOut'
 
-  ###########################
-  # Expense Section
-  ###########################
   /expenses:
     get:
       tags: [Expense]
@@ -114,7 +189,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Expense'
+                  $ref: '#/components/schemas/ExpenseOut'
     post:
       tags: [Expense]
       summary: Create new expense
@@ -123,10 +198,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Expense'
+              $ref: '#/components/schemas/ExpenseCreate'
       responses:
         '201':
           description: Expense created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseOut'
 
   /expenses/{expense_id}:
     get:
@@ -143,7 +222,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Expense'
+                $ref: '#/components/schemas/ExpenseOut'
     patch:
       tags: [Expense]
       summary: Update expense
@@ -157,25 +236,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Expense'
+              $ref: '#/components/schemas/ExpenseCreate'
       responses:
         '200':
           description: Expense updated
-    delete:
-      tags: [Expense]
-      summary: Delete expense
-      parameters:
-        - name: expense_id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '204':
-          description: Expense deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseOut'
 
-  ###########################
-  # Policy Section
-  ###########################
   /policies:
     get:
       tags: [Policy]
@@ -188,7 +257,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ReimbursementPolicy'
+                  $ref: '#/components/schemas/PolicyOut'
     post:
       tags: [Policy]
       summary: Create new policy
@@ -197,10 +266,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ReimbursementPolicy'
+              $ref: '#/components/schemas/PolicyCreate'
       responses:
         '201':
           description: Policy created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyOut'
 
   /policies/{policy_id}:
     patch:
@@ -216,25 +289,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ReimbursementPolicy'
+              $ref: '#/components/schemas/PolicyCreate'
       responses:
         '200':
           description: Policy updated
-    delete:
-      tags: [Policy]
-      summary: Delete policy
-      parameters:
-        - name: policy_id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '204':
-          description: Policy deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyOut'
 
-  ###########################
-  # Audit Log Section
-  ###########################
   /audit_logs:
     get:
       tags: [AuditLog]
@@ -247,7 +310,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/AuditLog'
+                  $ref: '#/components/schemas/AuditLogOut'
     post:
       tags: [AuditLog]
       summary: Record new audit log entry
@@ -256,69 +319,11 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AuditLog'
+              $ref: '#/components/schemas/AuditLogCreate'
       responses:
         '201':
           description: Audit log created
-
-components:
-  securitySchemes:
-    firebaseAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: FirebaseIDToken
-      description: |
-        Paste your Firebase ID token here.
-        Example: `Bearer eyJhbGciOiJ...`
-
-  schemas:
-    Employee:
-      type: object
-      properties:
-        authentication_id: { type: string }
-        employee_id: { type: string }
-        email: { type: string }
-        name: { type: string }
-        position: { type: string }
-        role: { type: string, enum: ["employee", "admin"] }
-        bank_account: { type: string, nullable: true }
-        notes: { type: string, nullable: true }
-
-    Expense:
-      type: object
-      properties:
-        expense_id: { type: string, nullable: true }
-        employee_id: { type: string }
-        amount: { type: number }
-        category: { type: string }
-        description: { type: string }
-        receipt_url: { type: string, nullable: true }
-        status: { type: string, enum: ["pending", "approved", "rejected"] }
-        decision_type: { type: string, enum: ["AI", "Human"] }
-        reviewed_by: { type: string, nullable: true }
-        decision_reason: { type: string, nullable: true }
-        submitted_at: { type: string, format: date-time }
-        updated_at: { type: string, format: date-time }
-
-    ReimbursementPolicy:
-      type: object
-      properties:
-        policy_id: { type: string, nullable: true }
-        category: { type: string }
-        max_amount: { type: number }
-        eligible_roles:
-          type: array
-          items: { type: string }
-        description: { type: string, nullable: true }
-        active: { type: boolean }
-
-    AuditLog:
-      type: object
-      properties:
-        actor: { type: string }
-        action: { type: string, enum: ["create", "update", "delete"] }
-        target_type: { type: string, enum: ["expense", "employee", "policy"] }
-        target_id: { type: string, nullable: true }
-        log_notes: { type: string }
-        action_type: { type: string }
-        timestamp: { type: string, format: date-time }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogOut'

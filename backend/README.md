@@ -20,6 +20,7 @@ Run:
 ```bash
 firebase init emulators
 ```
+Choose project: `expensense-8110a (expenSense)`
 
 When prompted, choose:
 
@@ -71,7 +72,7 @@ This will open the **Swagger UI** for testing your API.
 1. Go to the **Authentication** section in the Firebase Emulator UI.
 2. Create a new test user (e.g. `yzeng@scu.edu` with password `123456`).
 
-Then make sure your `test/get_token.py` file matches this user:
+Then make sure your `utils/get_token.py` file matches this user:
 
 ```python
 data = {

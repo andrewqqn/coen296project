@@ -14,5 +14,5 @@ class PolicyUpdate(BaseModel):
     description: Optional[str] = None
     active: Optional[bool] = None
 
-class PolicyOut(PolicyCreate):
+class PolicyOut(BaseModel):
     policy_id: str

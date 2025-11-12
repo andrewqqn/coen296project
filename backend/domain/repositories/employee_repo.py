@@ -9,7 +9,7 @@ def create(data: dict):
     ref = db.collection(COLLECTION).document()
     data["employee_id"] = ref.id
     ref.set(data)
-    return {"create": True, "employee_id": ref.id}
+    return data
 def update(emp_id: str, data: dict):
     db.collection(COLLECTION).document(emp_id).update(data)
     return {"update": True, "employee_id": emp_id}

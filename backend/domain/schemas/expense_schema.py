@@ -16,7 +16,7 @@ class ExpenseUpdate(BaseModel):
     status: Optional[Literal["pending", "approved", "rejected"]] = None
     decision_reason: Optional[str] = None
 
-class ExpenseOut(ExpenseCreate):
+class ExpenseOut(BaseModel):
     expense_id: str
     status: Literal["pending", "approved", "rejected"]
     decision_type: Literal["AI", "Human"]
