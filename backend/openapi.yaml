@@ -1,11 +1,10 @@
-
 openapi: 3.0.3
 info:
   title: Expense Reimbursement System API (Synced Schemas)
   version: 2.0.0
-  description: >
-    API definitions generated from current Pydantic schemas for Employee, Expense, Policy, and AuditLog.
-    All request and response bodies strictly match the Python schema definitions.
+  description: |
+    API definitions generated from current Pydantic schemas and routers.
+    Request and response bodies strictly match the Python schema definitions used by the FastAPI routers.
 servers:
   - url: https://localhost:8081/api/v1
     description: Local test server
@@ -29,12 +28,17 @@ components:
       required: [authentication_id, email, name, position, role]
       properties:
         authentication_id: { type: string }
-        email: { type: string }
+        email: { type: string, format: email }
         name: { type: string }
         position: { type: string }
         role: { type: string, enum: ["employee", "admin"], default: "employee" }
         bank_account: { type: string, nullable: true }
         notes: { type: string, nullable: true }
+
+    EmployeeUpdate:
+      # Same shape as EmployeeCreate (used for PATCH)
+      allOf:
+        - $ref: '#/components/schemas/EmployeeCreate'
 
     EmployeeOut:
       allOf:
@@ -51,54 +55,42 @@ components:
         employee_id: { type: string }
         amount: { type: number }
         category: { type: string }
-        description: { type: string, default: "" }
-        receipt_url: { type: string, format: uri, nullable: true }
+        business_justification: { type: string, default: "" }
 
     ExpenseOut:
-      allOf:
-        - $ref: '#/components/schemas/ExpenseCreate'
-        - type: object
-          required: [expense_id, status, decision_type, submitted_at, updated_at]
-          properties:
-            expense_id: { type: string }
-            status: { type: string, enum: ["pending", "approved", "rejected"] }
-            decision_type: { type: string, enum: ["AI", "Human"] }
-            reviewed_by: { type: string, nullable: true }
-            decision_reason: { type: string, nullable: true }
-            submitted_at: { type: string, format: date-time }
-            updated_at: { type: string, format: date-time }
-
-    PolicyCreate:
       type: object
-      required: [category, max_amount]
+      required: [expense_id, status, submitted_at]
       properties:
-        category: { type: string }
-        max_amount: { type: number }
-        eligible_roles:
-          type: array
-          items: { type: string }
-          default: ["employee"]
-        description: { type: string, nullable: true }
-        active: { type: boolean, default: true }
+        expense_id: { type: string }
+        status: { type: string, enum: ["pending", "approved", "rejected"], default: "pending" }
+        submitted_at: { type: string, format: date-time }
 
-    PolicyOut:
-      allOf:
-        - $ref: '#/components/schemas/PolicyCreate'
-        - type: object
-          required: [policy_id]
-          properties:
-            policy_id: { type: string }
+    ExpenseUpdate:
+      type: object
+      required: [expense_id, date_of_expense, employee_id, amount, business_justification, category]
+      properties:
+        expense_id: { type: string }
+        date_of_expense: { type: string, format: date-time }
+        employee_id: { type: string }
+        amount: { type: number }
+        business_justification: { type: string }
+        category: { type: string, enum: ["Travel", "Meals", "Conference", "Other"], default: "Other" }
+
+        status: { type: string, enum: ["pending", "approved", "rejected"], default: "pending" }
+        decision_actor: { type: string, enum: ["AI", "Human"], default: "AI" }
+        decision_reason: { type: string, nullable: true }
+
+        receipt_path: { type: string, nullable: true }
+
+        submitted_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
 
     AuditLogCreate:
       type: object
-      required: [actor, action, target_type]
+      required: [actor]
       properties:
         actor: { type: string }
-        action: { type: string, enum: ["create", "update", "delete"] }
-        target_type: { type: string, enum: ["expense", "employee", "policy"] }
-        target_id: { type: string, nullable: true }
-        log_notes: { type: string, nullable: true }
-        action_type: { type: string, nullable: true }
+        log: { type: string, nullable: true, default: "" }
 
     AuditLogOut:
       allOf:
@@ -108,11 +100,20 @@ components:
           properties:
             timestamp: { type: string, format: date-time }
 
+    ReceiptUrl:
+      type: object
+      required: [expense_id, url]
+      properties:
+        expense_id: { type: string }
+        url: { type: string, format: uri }
+
 paths:
   /employees:
     get:
       tags: [Employee]
       summary: List all employees
+      security:
+        - firebaseAuth: []
       responses:
         '200':
           description: List of employees
@@ -125,6 +126,8 @@ paths:
     post:
       tags: [Employee]
       summary: Create new employee
+      security:
+        - firebaseAuth: []
       requestBody:
         required: true
         content:
@@ -143,6 +146,8 @@ paths:
     get:
       tags: [Employee]
       summary: Get employee by ID
+      security:
+        - firebaseAuth: []
       parameters:
         - name: employee_id
           in: path
@@ -155,9 +160,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EmployeeOut'
+        '404':
+          description: Employee not found
     patch:
       tags: [Employee]
       summary: Update employee info
+      security:
+        - firebaseAuth: []
       parameters:
         - name: employee_id
           in: path
@@ -168,7 +177,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/EmployeeCreate'
+              $ref: '#/components/schemas/EmployeeUpdate'
       responses:
         '200':
           description: Employee updated
@@ -176,11 +185,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EmployeeOut'
+    delete:
+      tags: [Employee]
+      summary: Delete employee
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: employee_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Employee deleted (no content)
 
   /expenses:
     get:
       tags: [Expense]
       summary: List all expenses
+      security:
+        - firebaseAuth: []
       responses:
         '200':
           description: List of expenses
@@ -190,15 +214,27 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ExpenseOut'
+
     post:
       tags: [Expense]
-      summary: Create new expense
+      summary: Create new expense (multipart form with JSON string + receipt file)
+      security:
+        - firebaseAuth: []
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
-              $ref: '#/components/schemas/ExpenseCreate'
+              type: object
+              required: [expense_data, receipt]
+              properties:
+                # Router expects a form field 'expense_data' containing the JSON string for ExpenseCreate
+                expense_data:
+                  type: string
+                  description: JSON string matching the ExpenseCreate schema
+                receipt:
+                  type: string
+                  format: binary
       responses:
         '201':
           description: Expense created
@@ -211,6 +247,8 @@ paths:
     get:
       tags: [Expense]
       summary: Get expense by ID
+      security:
+        - firebaseAuth: []
       parameters:
         - name: expense_id
           in: path
@@ -223,9 +261,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ExpenseOut'
+        '404':
+          description: Expense not found
     patch:
       tags: [Expense]
       summary: Update expense
+      security:
+        - firebaseAuth: []
       parameters:
         - name: expense_id
           in: path
@@ -236,7 +278,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ExpenseCreate'
+              $ref: '#/components/schemas/ExpenseUpdate'
       responses:
         '200':
           description: Expense updated
@@ -244,64 +286,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ExpenseOut'
-
-  /policies:
-    get:
-      tags: [Policy]
-      summary: List reimbursement policies
-      responses:
-        '200':
-          description: List of policies
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PolicyOut'
-    post:
-      tags: [Policy]
-      summary: Create new policy
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PolicyCreate'
-      responses:
-        '201':
-          description: Policy created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PolicyOut'
-
-  /policies/{policy_id}:
-    patch:
-      tags: [Policy]
-      summary: Update policy
+    delete:
+      tags: [Expense]
+      summary: Delete expense
+      security:
+        - firebaseAuth: []
       parameters:
-        - name: policy_id
+        - name: expense_id
           in: path
           required: true
           schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PolicyCreate'
       responses:
-        '200':
-          description: Policy updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PolicyOut'
+        '204':
+          description: Expense deleted (no content)
 
   /audit_logs:
     get:
       tags: [AuditLog]
       summary: List all audit logs
+      security:
+        - firebaseAuth: []
       responses:
         '200':
           description: List of audit logs
@@ -314,6 +318,8 @@ paths:
     post:
       tags: [AuditLog]
       summary: Record new audit log entry
+      security:
+        - firebaseAuth: []
       requestBody:
         required: true
         content:
@@ -327,3 +333,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuditLogOut'
+
+  /documents/receipt/{expense_id}:
+    get:
+      tags: [Documents]
+      summary: Get a temporary URL to view a receipt PDF for an expense
+      security:
+        - firebaseAuth: []
+      parameters:
+        - name: expense_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Temporary receipt URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiptUrl'
+        '404':
+          description: Expense or receipt not found

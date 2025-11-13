@@ -5,9 +5,5 @@ from typing import Optional, Literal
 @dataclass
 class AuditLog:
     actor: str
-    action: Literal["create", "update", "delete"]
-    target_type: Literal["expense", "employee", "policy"]
-    target_id: Optional[str] = None
-    log_notes: str = ""
-    action_type: str = ""
+    log: str = ""
     timestamp: datetime = field(default_factory=datetime.utcnow)

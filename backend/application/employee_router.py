@@ -18,11 +18,11 @@ def get_employee(employee_id: str):
 
 @router.post("", response_model=EmployeeOut)
 def create_employee(data: EmployeeCreate):
-    return employee_service.create_employee(data.dict())
+    return employee_service.create_employee(data.model_dump())
 
 @router.patch("/{employee_id}", response_model=EmployeeOut)
 def update_employee(employee_id: str, data: EmployeeUpdate):
-    return employee_service.update_employee(employee_id, data.dict(exclude_unset=True))
+    return employee_service.update_employee(employee_id, data.model_dump(exclude_unset=True))
 
 @router.delete("/{employee_id}")
 def delete_employee(employee_id: str):

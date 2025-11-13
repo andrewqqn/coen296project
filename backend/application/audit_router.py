@@ -11,4 +11,4 @@ def list_logs():
 
 @router.post("", response_model=AuditLogOut)
 def create_log(data: AuditLogCreate):
-    return audit_service.create_log(data.dict())
+    return audit_service.create_log(data.model_dump())

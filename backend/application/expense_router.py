@@ -1,6 +1,9 @@
 from fastapi import APIRouter, HTTPException
 from domain.services import expense_service
-from domain.schemas.expense_schema import ExpenseCreate, ExpenseUpdate, ExpenseOut
+from domain.schemas.expense_schema import (ExpenseCreate, ExpenseOut, ExpenseUpdate)
+from fastapi import UploadFile, File, Form
+import json
+
 from typing import List
 
 router = APIRouter(prefix="/expenses", tags=["Expense"])
@@ -9,9 +12,18 @@ router = APIRouter(prefix="/expenses", tags=["Expense"])
 def list_expense():
     return expense_service.list_expenses()
 
+
 @router.post("", response_model=ExpenseOut)
-def create_expense(data: ExpenseCreate):
-    return expense_service.create_expense(data.dict())
+async def create_expense(
+    expense_data: str = Form(...),       # JSON as string
+    receipt: UploadFile = File(...),     # file
+):
+    # Step 1: parse JSON string → Pydantic
+    data_dict = json.loads(expense_data)
+    expense_create = ExpenseCreate(**data_dict)
+
+    # Step 2: send to service
+    return await expense_service.create_expense(expense_create, receipt)
 
 @router.get("/{expense_id}", response_model=ExpenseOut)
 def get_expense(expense_id: str):
@@ -22,7 +34,7 @@ def get_expense(expense_id: str):
 
 @router.patch("/{expense_id}", response_model=ExpenseOut)
 def update_expense(expense_id: str, data: ExpenseUpdate):
-    return expense_service.update_expense(expense_id, data.dict(exclude_unset=True))
+    return expense_service.update_expense(expense_id, data.model_dump(exclude_unset=True))
 
 @router.delete("/{expense_id}")
 def delete_expense(expense_id: str):

@@ -4,17 +4,19 @@ from typing import Optional, Literal
 
 @dataclass
 class Expense:
-    expense_id: Optional[str] = None          # Firestore generated ID
-    employee_id: str = ""
-    amount: float = 0.0
-    category: str = ""
-    description: str = ""
-    receipt_url: Optional[str] = None         # Firebase Storage path
+    expense_id: str
+    date_of_expense: datetime
+
+    employee_id: str
+    amount: float
+    business_justification: str
+    category: Literal["Travel", "Meals", "Conference", "Other"] = "Other"
 
     status: Literal["pending", "approved", "rejected"] = "pending"
-    decision_type: Literal["AI", "Human"] = "AI"
-    reviewed_by: Optional[str] = None
-    decision_reason: Optional[str] = None
+    decision_actor: Literal["AI", "Human"] = "AI"
+    decision_reason: str = None
+
+    receipt_path: str = None         # Firebase Storage path
 
     submitted_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
