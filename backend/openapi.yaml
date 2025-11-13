@@ -334,23 +334,110 @@ paths:
               schema:
                 $ref: '#/components/schemas/AuditLogOut'
 
-  /documents/receipt/{expense_id}:
-    get:
-      tags: [Documents]
-      summary: Get a temporary URL to view a receipt PDF for an expense
-      security:
-        - firebaseAuth: []
-      parameters:
-        - name: expense_id
-          in: path
-          required: true
-          schema: { type: string }
+  /documents/upload:
+    post:
+      tags:
+        - Documents
+      summary: Upload a document
+      description: >
+        Upload any kind of document to the storage backend (Firebase Storage Emulator or Production).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
       responses:
         '200':
-          description: Temporary receipt URL
+          description: Document uploaded successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReceiptUrl'
-        '404':
-          description: Expense or receipt not found
+                type: object
+                properties:
+                  path:
+                    type: string
+                    example: "documents/filename.pdf"
+                  download_url:
+                    type: string
+
+  /documents/url:
+    get:
+      tags:
+        - Documents
+      summary: Get public/signed URL for a document
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "documents/file.pdf"
+      responses:
+        '200':
+          description: URL generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  path:
+                    type: string
+                  url:
+                    type: string
+
+  /documents/download:
+    get:
+      tags:
+        - Documents
+      summary: Download a document (binary)
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "documents/file.pdf"
+      responses:
+        '200':
+          description: Document downloaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  path:
+                    type: string
+                  size:
+                    type: integer
+
+  /documents/delete:
+    delete:
+      tags:
+        - Documents
+      summary: Delete a document
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "documents/example.pdf"
+      responses:
+        '200':
+          description: Document deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  path:
+                    type: string
+
+

@@ -1,39 +1,33 @@
 from domain.repositories import document_repo
 
 
-def upload_receipt(file_name: str, file_data: bytes):
-    """Upload a receipt and return file path."""
-    return document_repo.upload_file(file_name, file_data)
+# ---- Base generic document API ----
 
-
-def generate_receipt_url(file_path: str, expire_seconds: int = 3600):
-    """Generate signed URL for viewing."""
-    return document_repo.generate_signed_url(file_path, expire_seconds)
-
-
-def delete_receipt(file_path: str):
-    """Delete from Storage."""
-    return document_repo.delete_file(file_path)
-
-
-def download_receipt(file_path: str) -> bytes:
+def upload_document(file_path: str, file_data: bytes):
     """
-    Download binary content of the receipt.
-    Useful for Admin preview, OCR, or AI policy checks.
+    Generic document upload function.
+    file_path includes folder + file name.
     """
+    return document_repo.upload_file(file_path, file_data)
+
+
+def download_document(file_path: str) -> bytes:
     return document_repo.download_file(file_path)
 
 
-def file_exists(file_path: str) -> bool:
-    """
-    Check if receipt exists in Storage (safe for admin).
-    """
-    return document_repo.file_exists(file_path)
+def generate_document_url(file_path: str, expire_seconds: int = 3600):
+    return document_repo.generate_signed_url(file_path, expire_seconds)
 
 
-def get_metadata(file_path: str) -> dict:
-    """
-    Retrieve metadata such as content type, size, updated_at.
-    Useful for admin, audit, or validation.
-    """
-    return document_repo.get_metadata(file_path)
+# ---- Domain-specific wrappers (optional) ----
+
+def upload_receipt(file_name: str, file_data: bytes):
+    return upload_document(f"expense_receipts/{file_name}", file_data)
+
+
+def download_receipt(file_path: str):
+    return download_document(file_path)
+
+
+def generate_receipt_url(file_path: str, expire_seconds: int = 3600):
+    return generate_document_url(file_path, expire_seconds)

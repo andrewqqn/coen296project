@@ -2,11 +2,17 @@ import os
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.openapi.utils import get_openapi
-from firebase_admin import auth
+
 from dotenv import load_dotenv
+load_dotenv()
+
+from infrastructure.firebase_client import init_firebase
+init_firebase()
+
+from firebase_admin import auth
+
 from application import employee_router, expense_router, audit_router, document_router
 
-load_dotenv()
 security = HTTPBearer(auto_error=False)
 
 print("DEBUG: FIREBASE_STORAGE_EMULATOR_HOST=",
