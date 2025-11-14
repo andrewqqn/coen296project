@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from domain.services import employee_service
+from services import employee_service
 from domain.schemas.employee_schema import EmployeeCreate, EmployeeUpdate, EmployeeOut
 from typing import List
 

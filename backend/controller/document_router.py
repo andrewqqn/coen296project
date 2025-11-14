@@ -1,5 +1,5 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
-from domain.services import document_service
+from fastapi import APIRouter, UploadFile
+from services import document_service
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 

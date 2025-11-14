@@ -11,7 +11,7 @@ init_firebase()
 
 from firebase_admin import auth
 
-from application import employee_router, expense_router, audit_router, document_router
+from controller import employee_router, expense_router, audit_router, document_router
 
 security = HTTPBearer(auto_error=False)
 
@@ -95,3 +95,5 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
+# from infrastructure.chroma_client import init_chroma_policy_client
+# init_chroma_policy_client()

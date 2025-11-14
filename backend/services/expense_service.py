@@ -1,11 +1,5 @@
 from domain.repositories import expense_repo
-from domain.repositories import document_repo
-from domain.schemas.expense_schema import ExpenseCreate, ExpenseOut
-from uuid import uuid4
-from datetime import datetime
-
-from domain.repositories import expense_repo
-from domain.services.document_service import upload_receipt
+from services.document_service import upload_receipt
 from domain.schemas.expense_schema import ExpenseCreate, ExpenseOut
 from datetime import datetime
 

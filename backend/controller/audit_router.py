@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from domain.services import audit_service
+from services import audit_service
 from domain.schemas.audit_schema import AuditLogCreate, AuditLogOut
 from typing import List
 

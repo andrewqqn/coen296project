@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from domain.services import expense_service
+from services import expense_service
 from domain.schemas.expense_schema import (ExpenseCreate, ExpenseOut, ExpenseUpdate)
 from fastapi import UploadFile, File, Form
 import json

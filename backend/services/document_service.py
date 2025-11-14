@@ -4,10 +4,6 @@ from domain.repositories import document_repo
 # ---- Base generic document API ----
 
 def upload_document(file_path: str, file_data: bytes):
-    """
-    Generic document upload function.
-    file_path includes folder + file name.
-    """
     return document_repo.upload_file(file_path, file_data)
 
 
