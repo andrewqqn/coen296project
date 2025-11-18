@@ -6,3 +6,4 @@ PyYAML
 openai
 pydantic-ai
 pydantic-ai-slim[openai]
+PyPDF2

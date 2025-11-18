@@ -51,6 +51,9 @@ wheels/
 .env.*
 !/.env.example
 
+# Uploaded files (receipts, documents)
+backend/uploads/
+
 # Pytest
 .pytest_cache/
 .coverage
