@@ -1,15 +1,14 @@
 import os
-import time
 import json
+import time
 import base64
-import hashlib
-import hmac
+import urllib.parse
 import requests
 
 
 PROJECT_ID = os.getenv("PROJECT_ID")
-BUCKET = os.getenv("STORAGE_BUCKET")
-EMU_HOST = os.getenv("FIREBASE_STORAGE_EMULATOR_HOST")
+BUCKET = os.getenv("STORAGE_BUCKET")  # expensense-8110a.firebasestorage.app
+EMU_HOST = os.getenv("FIREBASE_STORAGE_EMULATOR_HOST")  # 127.0.0.1:9199
 USE_EMULATOR = bool(EMU_HOST)
 
 if USE_EMULATOR:
@@ -21,16 +20,21 @@ else:
     BASE_UPLOAD = "https://storage.googleapis.com/upload/storage/v1/b"
     BASE_STORAGE = "https://storage.googleapis.com/storage/v1/b"
     BASE_DOWNLOAD = "https://storage.googleapis.com/download/storage/v1/b"
-    SESSION = requests.Session()   # Or AuthorizedSession?
+    SESSION = requests.Session()
 
 
-# -----------------------------
-# Upload File
-# -----------------------------
+# -------------------------------------------------------------
+# 1. Upload File (Correct: use emulator JSON result)
+# -------------------------------------------------------------
 def upload_file(file_path: str, file_bytes: bytes, content_type="application/octet-stream"):
-    """Upload file using REST API (emulator or production)."""
+    """
+    Upload a file using Firebase Storage REST API.
+    Correctly handles URL encoding + emulator response (mediaLink).
+    """
 
-    url = f"{BASE_UPLOAD}/{BUCKET}/o?uploadType=media&name={file_path}"
+    encoded_path = urllib.parse.quote(file_path, safe='')
+
+    url = f"{BASE_UPLOAD}/{BUCKET}/o?uploadType=media&name={encoded_path}"
     headers = {"Content-Type": content_type}
 
     r = SESSION.post(url, data=file_bytes, headers=headers)
@@ -38,23 +42,28 @@ def upload_file(file_path: str, file_bytes: bytes, content_type="application/oct
     if r.status_code not in (200, 201):
         raise Exception(f"Upload failed: {r.text}")
 
-    if USE_EMULATOR:
-        download_url = f"{BASE_DOWNLOAD}/{BUCKET}/o/{file_path}?alt=media"
-    else:
-        download_url = f"https://storage.googleapis.com/{BUCKET}/{file_path}"
+    resp = r.json()
+
+    # emulator and production both return `mediaLink`
+    download_url = resp.get("mediaLink")
 
     return {
         "success": True,
-        "path": file_path,
-        "download_url": download_url
+        "path": resp["name"],        # exact path inside bucket
+        "bucket": resp["bucket"],
+        "generation": resp.get("generation"),
+        "download_url": download_url,
     }
 
 
-# -----------------------------
-# Download File
-# -----------------------------
+# -------------------------------------------------------------
+# 2. Download File
+# -------------------------------------------------------------
 def download_file(file_path: str) -> bytes:
-    url = f"{BASE_DOWNLOAD}/{BUCKET}/o/{file_path}?alt=media"
+    """Download file (URL encoded)."""
+    encoded = urllib.parse.quote(file_path, safe='')
+
+    url = f"{BASE_DOWNLOAD}/{BUCKET}/o/{encoded}?alt=media"
     r = SESSION.get(url)
 
     if r.status_code != 200:
@@ -63,20 +72,22 @@ def download_file(file_path: str) -> bytes:
     return r.content
 
 
-# -----------------------------
-# File Exists?
-# -----------------------------
+# -------------------------------------------------------------
+# 3. File Exists
+# -------------------------------------------------------------
 def file_exists(file_path: str) -> bool:
-    url = f"{BASE_STORAGE}/{BUCKET}/o/{file_path}"
+    encoded = urllib.parse.quote(file_path, safe='')
+    url = f"{BASE_STORAGE}/{BUCKET}/o/{encoded}"
     r = SESSION.get(url)
     return r.status_code == 200
 
 
-# -----------------------------
-# Delete File
-# -----------------------------
+# -------------------------------------------------------------
+# 4. Delete File
+# -------------------------------------------------------------
 def delete_file(file_path: str):
-    url = f"{BASE_STORAGE}/{BUCKET}/o/{file_path}"
+    encoded = urllib.parse.quote(file_path, safe='')
+    url = f"{BASE_STORAGE}/{BUCKET}/o/{encoded}"
     r = SESSION.delete(url)
 
     if r.status_code not in (200, 204):
@@ -85,14 +96,16 @@ def delete_file(file_path: str):
     return True
 
 
+# -------------------------------------------------------------
+# 5. Signed URL - Production only
+# -------------------------------------------------------------
 def generate_signed_url(file_path: str, expire_seconds: int = 3600):
-    """Simple version; emulator returns direct URL."""
+    """Signed URL for production. Emulator doesn't support it."""
 
     if USE_EMULATOR:
-        # Emulator doesn't use signed URLs
-        return f"{BASE_DOWNLOAD}/{BUCKET}/o/{file_path}?alt=media"
+        encoded = urllib.parse.quote(file_path, safe='')
+        return f"{BASE_DOWNLOAD}/{BUCKET}/o/{encoded}?alt=media"
 
-    # ---- Production signed URL (service account required) ----
     sa_path = os.getenv("FIREBASE_CREDENTIALS_PATH")
     if not sa_path or not os.path.exists(sa_path):
         raise RuntimeError("Signed URL requires a service account JSON.")
@@ -104,14 +117,18 @@ def generate_signed_url(file_path: str, expire_seconds: int = 3600):
     private_key = data["private_key"]
 
     expires_at = int(time.time()) + expire_seconds
-    to_sign = f"GET\n\n\n{expires_at}\n/{BUCKET}/{file_path}".encode("utf-8")
+    encoded = urllib.parse.quote(file_path, safe='')
+
+    to_sign = f"GET\n\n\n{expires_at}\n/{BUCKET}/{encoded}".encode("utf-8")
+
+    import hashlib, hmac
 
     signature = base64.b64encode(
         hmac.new(private_key.encode("utf-8"), to_sign, hashlib.sha256).digest()
     ).decode("utf-8")
 
     return (
-        f"https://storage.googleapis.com/{BUCKET}/{file_path}"
+        f"https://storage.googleapis.com/{BUCKET}/{encoded}"
         f"?GoogleAccessId={client_email}"
         f"&Expires={expires_at}"
         f"&Signature={signature}"

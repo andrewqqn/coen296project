@@ -22,3 +22,5 @@ def update(emp_id: str, data: dict):
 def delete(emp_id: str):
     db.collection(COLLECTION).document(emp_id).delete()
     return {"deleted": True, "employee_id": emp_id}
+
+

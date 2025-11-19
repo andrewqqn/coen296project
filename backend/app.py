@@ -14,12 +14,29 @@ from firebase_admin import auth
 from controller import employee_router, expense_router, audit_router, document_router
 
 security = HTTPBearer(auto_error=False)
-
-print("DEBUG: FIREBASE_STORAGE_EMULATOR_HOST=",
-      os.getenv("FIREBASE_STORAGE_EMULATOR_HOST"))
-print("DEBUG: USE_FIRESTORE_EMULATOR=",
-      os.getenv("USE_FIRESTORE_EMULATOR"))
 USE_AUTH_EMULATOR = os.getenv("USE_FIRESTORE_EMULATOR")
+
+import logging
+from logging.handlers import RotatingFileHandler
+
+LOG_DIR = "logs"
+os.makedirs(LOG_DIR, exist_ok=True)
+
+LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format=LOG_FORMAT,
+    handlers=[
+        logging.StreamHandler(),
+        RotatingFileHandler(
+            f"{LOG_DIR}/app.log",
+            maxBytes=5_000_000,
+            backupCount=3,
+            encoding="utf-8",
+        )
+    ]
+)
 
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -95,5 +112,12 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
-# from infrastructure.chroma_client import init_chroma_policy_client
-# init_chroma_policy_client()
+from infrastructure.chroma_client import init_chroma_policy_client
+chroma_client = init_chroma_policy_client()
+collection = chroma_client._get_or_create_collection()
+if collection.count() == 0:
+    print("No Chroma data found → loading policy PDF now...")
+    chroma_client.store_policy_pdf()
+else:
+    print(f"Chroma loaded with {collection.count()} chunks")
+

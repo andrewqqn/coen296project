@@ -1,8 +1,8 @@
 from infrastructure.firebase_client import get_firestore_client
-import json
 
 db = get_firestore_client()
 COLLECTION = "expenses"
+
 def get_all():
     return [doc.to_dict() | {"expense_id": doc.id} for doc in db.collection(COLLECTION).stream()]
 
@@ -22,3 +22,11 @@ def update(expense_id: str, data: dict):
 def delete(expense_id: str):
     db.collection(COLLECTION).document(expense_id).delete()
     return {"deleted": True, "expense_id": expense_id}
+
+def get_by_employee(employee_id: str):
+    return [
+        doc.to_dict() | {"id": doc.id}
+        for doc in db.collection(COLLECTION)
+                    .where("employee_id", "==", employee_id)
+                    .stream()
+    ]

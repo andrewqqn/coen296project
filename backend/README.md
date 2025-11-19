@@ -118,7 +118,8 @@ Paste that token into the **“Authorize”** dialog in Swagger UI
 ### Safe Expense example:
 ```
 {
-    "employee_id": "ym3rPyuJKJw4LbcRgOrj",
+    "employee_id": "ioGKG26szKxf96DhhDO5",
+    "date_of_expense": "2025-11-19",
     "amount": 390.00,
     "category": "Conference",
     "business_justification": "Attending conference to present a paper"

@@ -3,15 +3,30 @@ from typing import Literal
 from datetime import datetime
 
 class ExpenseCreate(BaseModel):
+    date_of_expense: datetime
     employee_id: str
     amount: float
-    category: str
-    business_justification: str = ""
+    business_justification: str
+    category: Literal["Travel", "Meals", "Conference", "Other"] = "Other"
+
 
 class ExpenseOut(BaseModel):
     expense_id: str
-    status: Literal["pending", "approved", "rejected"] = "pending"
+    date_of_expense: datetime
+
+    employee_id: str
+    amount: float
+    business_justification: str
+    category: Literal["Travel", "Meals", "Conference", "Other"] = "Other"
+
+    status: Literal["pending", "approved", "rejected", "admin-review"] = "pending"
+    decision_actor: str = None
+    decision_reason: str = None
+
+    receipt_path: str
+
     submitted_at: datetime
+    updated_at: datetime
 
 
 class ExpenseUpdate(BaseModel):

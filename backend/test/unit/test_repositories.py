@@ -10,7 +10,7 @@ if TEST_BACKEND_ROOT not in sys.path:
 
 import domain.repositories.employee_repo as employee_repo
 import domain.repositories.expense_repo as expense_repo
-import domain.repositories.audit_repo as audit_repo
+import domain.repositories.audit_log_repo as audit_repo
 import domain.repositories.document_repo as document_repo
 
 

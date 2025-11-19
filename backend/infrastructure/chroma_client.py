@@ -1,40 +1,51 @@
+"""
+Chroma Policy Vector DB Client (Production Grade)
+-------------------------------------------------
+
+Features:
+- Fully FREE embedding using sentence-transformers/all-mpnet-base-v2
+- Persistent ChromaDB (avoids test interference + Cloud Run friendly)
+- Automatic dimension mismatch detection + auto-cleaning
+- Chunk PDF policy into embeddings
+- Query top-k relevant policy snippets
+"""
+
+import logging
 from pathlib import Path
 from typing import List, Optional
-import logging
 from uuid import uuid4
 
-try:
-    import chromadb
-except Exception:
-    chromadb = None  # allow static analysis and import-time safety
+import chromadb
+from chromadb.config import Settings
 
-from langchain_openai import OpenAIEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.document_loaders import PyPDFLoader
+from pathlib import Path
+
 
 logger = logging.getLogger(__name__)
 
-# Default PDF path (absolute to the workspace) — will be used when callers don't pass one.
-DEFAULT_PDF_PATH = Path("/Users/yulinzeng/PycharmProjects/coen296project/backend/static/ExpenSense_Reimbursement_Policy_.pdf")
 
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_PDF_PATH = BASE_DIR / "static" / "ExpenSense_Reimbursement_Policy.pdf"
+
+# -----------------------------------------------------------
+# Utility: Simple chunker with overlap
+# -----------------------------------------------------------
 def _chunk_text(text: str, chunk_size: int = 800, chunk_overlap: int = 150) -> List[str]:
-    """Simple text chunker with overlap."""
     if not text:
         return []
     step = max(1, chunk_size - chunk_overlap)
-    chunks = [text[i : i + chunk_size] for i in range(0, len(text), step)]
-    return chunks
+    return [text[i: i + chunk_size] for i in range(0, len(text), step)]
 
 
+# -----------------------------------------------------------
+# Main Client
+# -----------------------------------------------------------
 class ChromaPolicyClient:
-    """Client to store and query the reimbursement policy in a Chroma collection.
-
-    This class will:
-    - create or get a Chroma collection named `reimbursement_policy`
-    - extract text from the policy PDF
-    - chunk the text into pieces
-    - compute embeddings via OpenAIEmbeddings
-    - add the documents, metadatas, and embeddings to the Chroma collection
+    """
+    Persistent, production-ready vector DB client.
     """
 
     def __init__(
@@ -43,133 +54,139 @@ class ChromaPolicyClient:
         pdf_path: Optional[Path] = None,
         chunk_size: int = 800,
         chunk_overlap: int = 150,
+        persist_dir: str = ".chroma_store",  # persistent directory
     ):
         self.collection_name = collection_name
-        self.chunk_size = int(chunk_size)
-        self.chunk_overlap = int(chunk_overlap)
-        self.pdf_path = Path(pdf_path) if pdf_path is not None else DEFAULT_PDF_PATH
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+        self.pdf_path = Path(pdf_path) if pdf_path else DEFAULT_PDF_PATH
 
-        # embedding model
-        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+        # FREE, high-quality semantic embedding model
+        self.embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-mpnet-base-v2",
+            model_kwargs={"device": "cpu"},  # Cloud Run safe
+            encode_kwargs={"normalize_embeddings": True},
+        )
 
-        # chromadb client and collection are created lazily
-        self.client = None
+        # Persistent Chroma (Critical for stability!)
+        self.client = chromadb.PersistentClient(
+            path=persist_dir,
+            settings=Settings(allow_reset=True),
+        )
+
         self.collection = None
 
-    def _ensure_client(self):
-        if self.client is not None:
-            return
-        if chromadb is None:
-            raise RuntimeError("chromadb package is not available. Install chromadb to use ChromaPolicyClient.")
-
-        # create a chromadb client
-        try:
-            self.client = chromadb.Client()
-        except TypeError:
-            # Different versions of chromadb may require config; try default constructor
-            self.client = chromadb.Client()
-
+    # -------------------------------------------------------
+    # Get or create collection (with auto dimension check)
+    # -------------------------------------------------------
     def _get_or_create_collection(self):
-        if self.collection is not None:
+        if self.collection:
             return self.collection
 
-        self._ensure_client()
-
-        # try create_collection with get_or_create flag if available
-        try:
-            # some chromadb versions support get_or_create parameter
-            self.collection = self.client.create_collection(name=self.collection_name, get_or_create=True)
-            return self.collection
-        except TypeError:
-            # signature doesn't accept get_or_create
-            pass
-        except Exception:
-            # fall through to other attempts
-            pass
-
-        # try to get existing collection
         try:
             self.collection = self.client.get_collection(self.collection_name)
-            return self.collection
         except Exception:
-            pass
+            # create new collection if not exists
+            self.collection = self.client.create_collection(
+                name=self.collection_name
+            )
 
-        # fallback: create collection without get_or_create
+        # --- auto-clean if dimension mismatch ---
         try:
-            self.collection = self.client.create_collection(name=self.collection_name)
-            return self.collection
+            existing = self.collection.get(include=["embeddings"])
+            if existing and "embeddings" in existing and existing["embeddings"]:
+                stored_dim = len(existing["embeddings"][0])
+                current_dim = len(self.embeddings.embed_query("test"))
+
+                if stored_dim != current_dim:
+                    print("⚠ Dimension mismatch detected → resetting collection…")
+                    self.client.delete_collection(self.collection_name)
+                    self.collection = self.client.create_collection(
+                        name=self.collection_name
+                    )
         except Exception as e:
-            raise RuntimeError(f"Failed to create or get Chroma collection '{self.collection_name}': {e}")
+            print("⚠ Warning during dimension check:", e)
 
+        return self.collection
+
+    # -------------------------------------------------------
+    # Store PDF into ChromaDB
+    # -------------------------------------------------------
     def store_policy_pdf(self) -> int:
-        """Load the policy PDF, chunk it, embed the chunks, and insert into Chroma.
-
-        Returns the number of chunks added.
-        """
         if not self.pdf_path.exists():
-            raise FileNotFoundError(f"Policy PDF not found at {self.pdf_path}")
+            raise FileNotFoundError(f"Policy PDF not found: {self.pdf_path}")
 
-        # load pdf pages into Document-like objects using LangChain's loader
         loader = PyPDFLoader(str(self.pdf_path))
-        documents = loader.load()
+        docs = loader.load()
 
-        # collect chunks and metadatas
-        chunks: List[str] = []
-        metadatas: List[dict] = []
+        chunks, metadatas = [], []
 
-        for page_idx, doc in enumerate(documents):
+        for page_idx, doc in enumerate(docs):
             text = getattr(doc, "page_content", "") or ""
-            page_chunks = _chunk_text(text, chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap)
+            page_chunks = _chunk_text(text, self.chunk_size, self.chunk_overlap)
+
             for i, chunk in enumerate(page_chunks):
                 chunks.append(chunk)
-                metadatas.append({"source": str(self.pdf_path), "page": page_idx + 1, "chunk_index": i})
+                metadatas.append(
+                    {
+                        "source": str(self.pdf_path),
+                        "page": page_idx + 1,
+                        "chunk_index": i,
+                    }
+                )
 
         if not chunks:
-            logger.info("No text chunks were extracted from the PDF.")
+            logger.warning("No chunks extracted from PDF")
             return 0
 
-        # compute embeddings for chunks
-        try:
-            embeddings = self.embeddings.embed_documents(chunks)
-        except AttributeError:
-            # Some embedding clients expose a different method name; try embed_texts
-            embeddings = getattr(self.embeddings, "embed_texts", lambda x: None)(chunks)
+        # Compute embeddings
+        embeddings = self.embeddings.embed_documents(chunks)
 
-        # ensure collection exists
+        # Save to Chroma
         collection = self._get_or_create_collection()
-
-        # prepare ids
         ids = [str(uuid4()) for _ in chunks]
 
-        # The Chroma collection.add signature varies between versions. Try the common forms.
-        try:
-            # preferred: provide embeddings explicitly
-            collection.add(ids=ids, documents=chunks, metadatas=metadatas, embeddings=embeddings)
-        except TypeError:
-            # some versions use 'documents' named arg only
-            try:
-                collection.add(documents=chunks, metadatas=metadatas, ids=ids)
-            except Exception as e:
-                raise RuntimeError(f"Failed to add documents to Chroma collection: {e}")
-        except Exception as e:
-            raise RuntimeError(f"Failed to add documents to Chroma collection: {e}")
+        collection.add(
+            ids=ids,
+            documents=chunks,
+            metadatas=metadatas,
+            embeddings=embeddings,
+        )
 
-        logger.info(f"Inserted {len(chunks)} chunks into Chroma collection '{self.collection_name}'")
+        logger.info(f"Inserted {len(chunks)} chunks into '{self.collection_name}'")
         return len(chunks)
 
+    # -------------------------------------------------------
+    # Query top-k snippets
+    # -------------------------------------------------------
+    def query(self, text: str, top_k: int = 3):
+        collection = self._get_or_create_collection()
 
-# module-level helper functions for convenience
+        query_embedding = self.embeddings.embed_query(text)
+
+        return collection.query(
+            query_embeddings=[query_embedding],
+            n_results=top_k,
+            include=["documents", "metadatas", "distances"],
+        )
+
+
+# -----------------------------------------------------------
+# Module-level helper
+# -----------------------------------------------------------
 _default_client: Optional[ChromaPolicyClient] = None
 
 
-def init_chroma_policy_client(pdf_path: Optional[str] = None) -> ChromaPolicyClient:
+def init_chroma_policy_client(pdf_path: Optional[Path] = None) -> ChromaPolicyClient:
     global _default_client
-    if _default_client is None:
-        _default_client = ChromaPolicyClient(pdf_path=Path(pdf_path) if pdf_path else DEFAULT_PDF_PATH)
+    if not _default_client:
+        _default_client = ChromaPolicyClient(
+            pdf_path=pdf_path
+        )
     return _default_client
 
 
-def store_policy_to_chroma(pdf_path: Optional[str] = None) -> int:
-    """Convenience function to store the configured policy PDF into the collection."""
+def store_policy_to_chroma(pdf_path: Optional[Path] = None) -> int:
     client = init_chroma_policy_client(pdf_path)
     return client.store_policy_pdf()
+
