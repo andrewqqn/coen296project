@@ -3,10 +3,11 @@ Orchestrator Router - Natural language query endpoint using Pydantic AI
 """
 from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, Form, Body, Request
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Literal
 import json
 from infrastructure.auth_middleware import verify_firebase_token
 from domain.services.orchestrator_service import process_query
+from domain.services import employee_service
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -44,6 +45,7 @@ class QueryResponse(BaseModel):
     tools_used: list[str] = []
     query: str
     error: str | None = None
+    user_role: str | None = None
 
 
 # Support both `/orchestrator` and `/orchestrator/` so frontend trailing slashes work
@@ -78,6 +80,31 @@ async def orchestrate_query(
     - "Create an expense from this receipt" (with PDF attachment)
     """
     try:
+        # Get user authentication ID from Firebase token
+        auth_id = user_claims.get('uid')
+        if not auth_id:
+            raise HTTPException(status_code=401, detail="User authentication ID not found")
+        
+        # Look up employee record to get employee_id and role
+        # First, try to find employee by authentication_id
+        all_employees = employee_service.list_employees()
+        employee = None
+        for emp in all_employees:
+            if emp.get('authentication_id') == auth_id:
+                employee = emp
+                break
+        
+        if not employee:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Employee record not found for authentication ID: {auth_id}. Please ensure the user is registered as an employee."
+            )
+        
+        employee_id = employee.get('employee_id')
+        role: Literal["employee", "admin"] = employee.get('role', 'employee')
+        
+        logger.info(f"User {auth_id} mapped to employee {employee_id} with role {role}")
+        
         content_type = request.headers.get("content-type", "")
         logger.info(f"Received request with Content-Type: {content_type}")
         
@@ -114,15 +141,16 @@ async def orchestrate_query(
                 except json.JSONDecodeError:
                     logger.warning("Failed to parse message_history JSON")
             
-            logger.info(f"Received query from user {user_claims.get('uid')}: {query}")
+            logger.info(f"Received query from employee {employee_id} ({role}): {query}")
             logger.info(f"Received {len(files)} file(s)")
             
             # Process the query with files
             result = await process_query(
-                query, 
+                query=query,
+                employee_id=employee_id,
+                role=role,
                 message_history=message_history_dicts,
-                files=files if files else None,
-                user_id=user_claims.get('uid')
+                files=files if files else None
             )
         
         # Handle application/json (without files)
@@ -134,14 +162,15 @@ async def orchestrate_query(
             if not query:
                 raise HTTPException(status_code=422, detail="Query field is required")
             
-            logger.info(f"Received query from user {user_claims.get('uid')}: {query}")
+            logger.info(f"Received query from employee {employee_id} ({role}): {query}")
             
             # Process the query without files
             result = await process_query(
-                query, 
+                query=query,
+                employee_id=employee_id,
+                role=role,
                 message_history=message_history,
-                files=None,
-                user_id=user_claims.get('uid')
+                files=None
             )
         
         if not result.get("success"):
