@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+firebase-admin
+python-dotenv
+PyYAML
+openai
+pydantic-ai
+pydantic-ai-slim[openai]
