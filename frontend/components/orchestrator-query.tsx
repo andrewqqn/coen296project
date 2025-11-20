@@ -64,7 +64,7 @@ export function OrchestratorQuery() {
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !loading) {
       handleSubmit();
     }
@@ -78,7 +78,7 @@ export function OrchestratorQuery() {
           placeholder="Ask me anything... (e.g., 'List all employees' or 'Show me all expenses')"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onKeyPress={handleKeyPress}
+          onKeyDown={handleKeyDown}
           disabled={loading}
           className="flex-1"
         />

@@ -50,7 +50,7 @@ def validated_create_expense(ctx: RunContext[None], data: Dict[str, Any]) -> Dic
         }
     
     # Call the actual service
-    from domain.services import expense_service
+    from services import expense_service
     return expense_service.create_expense(data)
 
 
@@ -63,7 +63,7 @@ def get_user_expenses(ctx: RunContext[str], user_id: str = None) -> list[Dict[st
     Args:
         user_id: Optional user ID to filter by. If not provided, uses current user.
     """
-    from domain.services import expense_service
+    from services import expense_service
     
     # Get all expenses
     all_expenses = expense_service.list_expenses()
@@ -88,7 +88,7 @@ def create_expense_and_log(ctx: RunContext[None], expense_data: Dict[str, Any]) 
     Args:
         expense_data: Expense data to create
     """
-    from domain.services import expense_service, audit_service
+    from services import expense_service, audit_log_service
     from datetime import datetime
     
     # Create the expense
@@ -96,7 +96,7 @@ def create_expense_and_log(ctx: RunContext[None], expense_data: Dict[str, Any]) 
     
     if result:
         # Create audit log
-        audit_service.create_log({
+        audit_log_service.create_log({
             "action": "CREATE_EXPENSE",
             "resource_id": result.get('id'),
             "timestamp": datetime.utcnow().isoformat(),
@@ -115,7 +115,7 @@ def safe_get_expense(ctx: RunContext[None], expense_id: str) -> Dict[str, Any]:
     Args:
         expense_id: The expense ID to retrieve
     """
-    from domain.services import expense_service
+    from services import expense_service
     
     try:
         result = expense_service.get_expense(expense_id)
@@ -144,7 +144,7 @@ def get_expense_summary(ctx: RunContext[None]) -> Dict[str, Any]:
     """
     Get a summary of all expenses including totals and counts by category.
     """
-    from domain.services import expense_service
+    from services import expense_service
     from collections import defaultdict
     
     expenses = expense_service.list_expenses()

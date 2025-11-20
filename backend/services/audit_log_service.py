@@ -1,0 +1,4 @@
+from repositories import audit_log_repo
+
+def list_logs(): return audit_repo.get_all()
+def create_log(data): return audit_repo.create(data)
