@@ -6,6 +6,10 @@ class GmailClient:
     def __init__(self, service):
         self.service = service
 
+    def get_authenticated_user_email(service):
+        profile = service.users().getProfile(userId="me").execute()
+        return profile["emailAddress"]
+
     def send_email(self, sender, to, subject, body):
         message = MIMEText(body)
         message["to"] = to

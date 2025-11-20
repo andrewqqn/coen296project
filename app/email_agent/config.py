@@ -1,16 +1,11 @@
 import os
 
-GOOGLE_CREDENTIALS_FILE = os.environ.get(
-    "GOOGLE_CREDENTIALS_FILE", # placeholder
-    "credentials.json"  # Your OAuth2 credentials file
+GMAIL_CREDENTIALS_FILE = os.environ.get(
+    "GMAIL_CREDENTIALS_FILE", 
+    "gmail_oauth_credentials.json"  # OAuth2 credentials file
 )
 
-TOKEN_FILE = os.environ.get(
-    "GOOGLE_TOKEN_FILE", # placeholder
+GMAIL_TOKEN_FILE = os.environ.get(
+    "GMAIL_TOKEN_FILE",
     "token.json"  # Automatically refreshed token
-)
-
-EMAIL_SENDER = os.environ.get(
-    "EMAIL_SENDER", # placeholder
-    "yourname@gmail.com" # placeholder
 )

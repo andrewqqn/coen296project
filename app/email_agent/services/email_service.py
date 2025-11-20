@@ -1,5 +1,6 @@
 from email_agent.services.email_parser import EmailParser
 from email_agent.services.email_organizer import EmailOrganizer
+from email_agent.gmail.gmail_client import GmailClient
 
 class EmailService:
     def __init__(self, gmail_service):
@@ -7,13 +8,11 @@ class EmailService:
         self.parser = EmailParser()
         self.organizer = EmailOrganizer(self.client)
 
-    def send_email(self, to, subject, body):
-        return self.gmail_client.send_email(
-            sender=EMAIL_SENDER,
-            to=to,
-            subject=subject,
-            body=body
-        )
+    def send_email(self, raw_message):
+        return self.gmail.service.users().messages().send(
+            userId="me",
+            body=raw_message
+        ).execute()
     
     def list_unread(self):
         msgs = self.client.list_messages("is:unread")

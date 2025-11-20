@@ -50,6 +50,8 @@ wheels/
 *.env
 .env.*
 !/.env.example
+gmail_oauth_credentials.json
+gmail_token.json
 
 # Pytest
 .pytest_cache/
