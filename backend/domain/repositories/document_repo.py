@@ -62,7 +62,7 @@ def upload_file(file_path: str, file_bytes: bytes, content_type="application/oct
 def download_file(file_path: str) -> bytes:
     """Download file (URL encoded)."""
     encoded = urllib.parse.quote(file_path, safe='')
-
+    print(encoded)
     url = f"{BASE_DOWNLOAD}/{BUCKET}/o/{encoded}?alt=media"
     r = SESSION.get(url)
 

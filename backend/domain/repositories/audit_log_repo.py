@@ -1,4 +1,6 @@
 from infrastructure.firebase_client import get_firestore_client
+from datetime import datetime
+
 db = get_firestore_client()
 COLLECTION = "audit_logs"
 def get_all():
@@ -6,5 +8,6 @@ def get_all():
 
 def create(data: dict):
     ref = db.collection(COLLECTION).document()
+    data["timestamp"] = datetime.utcnow().isoformat()
     ref.set(data)
     return {"id": ref.id, **data}
