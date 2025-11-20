@@ -3,11 +3,11 @@ Chroma Policy Vector DB Client (Production Grade)
 -------------------------------------------------
 
 Features:
-- Fully FREE embedding using sentence-transformers/all-mpnet-base-v2
-- Persistent ChromaDB (avoids test interference + Cloud Run friendly)
-- Automatic dimension mismatch detection + auto-cleaning
-- Chunk PDF policy into embeddings
-- Query top-k relevant policy snippets
+- FREE embedding using sentence-transformers/all-mpnet-base-v2
+- Persistent ChromaDB store (Cloud Run / local 都稳定)
+- 自动维度检查 & 维度不一致时重建 collection
+- 将 PDF policy 切 chunk 后写入向量库
+- 对外提供 query() 返回 top-k 相关 policy 片段
 """
 
 import logging
@@ -20,15 +20,12 @@ from chromadb.config import Settings
 
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.document_loaders import PyPDFLoader
-from pathlib import Path
-
 
 logger = logging.getLogger(__name__)
 
-
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_PDF_PATH = BASE_DIR / "static" / "ExpenSense_Reimbursement_Policy.pdf"
+
 
 # -----------------------------------------------------------
 # Utility: Simple chunker with overlap
@@ -37,16 +34,13 @@ def _chunk_text(text: str, chunk_size: int = 800, chunk_overlap: int = 150) -> L
     if not text:
         return []
     step = max(1, chunk_size - chunk_overlap)
-    return [text[i: i + chunk_size] for i in range(0, len(text), step)]
+    return [text[i : i + chunk_size] for i in range(0, len(text), step)]
 
 
 # -----------------------------------------------------------
 # Main Client
 # -----------------------------------------------------------
 class ChromaPolicyClient:
-    """
-    Persistent, production-ready vector DB client.
-    """
 
     def __init__(
         self,
@@ -68,7 +62,7 @@ class ChromaPolicyClient:
             encode_kwargs={"normalize_embeddings": True},
         )
 
-        # Persistent Chroma (Critical for stability!)
+        # Persistent Chroma
         self.client = chromadb.PersistentClient(
             path=persist_dir,
             settings=Settings(allow_reset=True),
@@ -79,24 +73,25 @@ class ChromaPolicyClient:
     # -------------------------------------------------------
     # Get or create collection (with auto dimension check)
     # -------------------------------------------------------
-    def _get_or_create_collection(self):
-        if self.collection:
+    def get_or_create_collection(self):
+        if self.collection is not None:
             return self.collection
 
+        # 先拿 / 创建 collection
         try:
             self.collection = self.client.get_collection(self.collection_name)
         except Exception:
-            # create new collection if not exists
-            self.collection = self.client.create_collection(
-                name=self.collection_name
-            )
+            self.collection = self.client.create_collection(name=self.collection_name)
 
-        # --- auto-clean if dimension mismatch ---
         try:
             existing = self.collection.get(include=["embeddings"])
-            if existing and "embeddings" in existing and existing["embeddings"]:
-                stored_dim = len(existing["embeddings"][0])
-                current_dim = len(self.embeddings.embed_query("test"))
+            embs = existing.get("embeddings") if isinstance(existing, dict) else None
+
+            # embs 的形状为 List[List[float]] 或 None
+            if embs is not None and len(embs) > 0:
+                stored_dim = len(embs[0])
+                current_vec = self.embeddings.embed_query("dimension check")
+                current_dim = len(current_vec)
 
                 if stored_dim != current_dim:
                     print("⚠ Dimension mismatch detected → resetting collection…")
@@ -113,13 +108,18 @@ class ChromaPolicyClient:
     # Store PDF into ChromaDB
     # -------------------------------------------------------
     def store_policy_pdf(self) -> int:
+        """
+        读取 reimbursement policy PDF，切 chunk 后写入 Chroma。
+        返回写入的 chunk 数量。
+        """
         if not self.pdf_path.exists():
             raise FileNotFoundError(f"Policy PDF not found: {self.pdf_path}")
 
         loader = PyPDFLoader(str(self.pdf_path))
         docs = loader.load()
 
-        chunks, metadatas = [], []
+        chunks: List[str] = []
+        metadatas: List[dict] = []
 
         for page_idx, doc in enumerate(docs):
             text = getattr(doc, "page_content", "") or ""
@@ -143,7 +143,7 @@ class ChromaPolicyClient:
         embeddings = self.embeddings.embed_documents(chunks)
 
         # Save to Chroma
-        collection = self._get_or_create_collection()
+        collection = self.get_or_create_collection()
         ids = [str(uuid4()) for _ in chunks]
 
         collection.add(
@@ -160,8 +160,7 @@ class ChromaPolicyClient:
     # Query top-k snippets
     # -------------------------------------------------------
     def query(self, text: str, top_k: int = 3):
-        collection = self._get_or_create_collection()
-
+        collection = self.get_or_create_collection()
         query_embedding = self.embeddings.embed_query(text)
 
         return collection.query(
@@ -172,21 +171,18 @@ class ChromaPolicyClient:
 
 
 # -----------------------------------------------------------
-# Module-level helper
+# Module-level helper (singleton client)
 # -----------------------------------------------------------
 _default_client: Optional[ChromaPolicyClient] = None
 
 
 def init_chroma_policy_client(pdf_path: Optional[Path] = None) -> ChromaPolicyClient:
     global _default_client
-    if not _default_client:
-        _default_client = ChromaPolicyClient(
-            pdf_path=pdf_path
-        )
+    if _default_client is None:
+        _default_client = ChromaPolicyClient(pdf_path=pdf_path)
     return _default_client
 
 
 def store_policy_to_chroma(pdf_path: Optional[Path] = None) -> int:
     client = init_chroma_policy_client(pdf_path)
     return client.store_policy_pdf()
-

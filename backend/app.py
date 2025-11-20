@@ -1,4 +1,3 @@
-from fastapi.middleware.cors import CORSMiddleware
 import os
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -12,7 +11,7 @@ init_firebase()
 
 from firebase_admin import auth
 
-from controller import orchestrator_router, employee_router, expense_router, audit_router, document_router
+from controller import employee_router, expense_router, audit_router, document_router
 
 security = HTTPBearer(auto_error=False)
 USE_AUTH_EMULATOR = os.getenv("USE_FIRESTORE_EMULATOR")
@@ -73,25 +72,10 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# ✅ Configure CORS - Must be added before routers
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",  # In case frontend runs on different port
-    ],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
-
 # Register routers
 app.include_router(employee_router.router)
 app.include_router(expense_router.router)
 app.include_router(audit_router.router)
-app.include_router(orchestrator_router.router)
 app.include_router(document_router.router)
 
 
@@ -129,11 +113,14 @@ def custom_openapi():
 app.openapi = custom_openapi
 
 from infrastructure.chroma_client import init_chroma_policy_client
+
 chroma_client = init_chroma_policy_client()
-collection = chroma_client._get_or_create_collection()
+
+collection = chroma_client.get_or_create_collection()
 if collection.count() == 0:
     print("No Chroma data found → loading policy PDF now...")
     chroma_client.store_policy_pdf()
 else:
     print(f"Chroma loaded with {collection.count()} chunks")
+
 

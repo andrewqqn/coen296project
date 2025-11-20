@@ -118,7 +118,7 @@ Paste that token into the **“Authorize”** dialog in Swagger UI
 ### Safe Expense example:
 ```
 {
-    "employee_id": "ioGKG26szKxf96DhhDO5",
+    "employee_id": "G0rnPstvCEAAOhD8LJse",
     "date_of_expense": "2025-11-19",
     "amount": 390.00,
     "category": "Conference",
@@ -127,6 +127,26 @@ Paste that token into the **“Authorize”** dialog in Swagger UI
 ```
 and 
 one test file like "registration_fee_390.00.pdf"
+
+current test result:
+
+```
+2025-11-20 15:17:48,692 [INFO] httpx: HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
+{
+  "decision": "REJECT",
+  "rule": "R4",
+  "reason": "The submitted date (2025-11-19) does not match the receipt date (2025-04-22).",
+  "confidence": 0.9,
+  "merchant_name": "The American Society of Mechanical Engineers",
+  "transaction_date": "2025-04-22",
+  "transaction_time": null,
+  "total_amount": 390.0,
+  "subtotal": 390.0,
+  "tax": 0.0,
+  "payment_method": "Visa"
+}
+2025-11-20 15:17:48,732 [ERROR] expense_agent: [AUTO_REVIEW_ERROR] 'dict' object has no attribute 'decision'
+```
 
 ### Prompt Injection example:
 ```
