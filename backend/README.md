@@ -102,7 +102,7 @@ Paste that token into the **“Authorize”** dialog in Swagger UI
 ## Create Employee
 ```
 {
-  "authentication_id": "z3OfT9eB7gY2CCh0wuGfb8rA4VrA",
+  "authentication_id": "A4fLqcyuRXCPklqCdYKL7WuGQIS7",
   "email": "yzeng@scu.edu",
   "name": "Yulin Zeng",
   "position": "research scientist",
@@ -118,8 +118,8 @@ Paste that token into the **“Authorize”** dialog in Swagger UI
 ### Safe Expense example:
 ```
 {
-    "employee_id": "TZ8xWWwCDqyed4mwp3Ha",
-    "date_of_expense": "2025-04-24",
+    "employee_id": "dHPrVrVT016xAITVpdRp",
+    "date_of_expense": "2025-04-22",
     "amount": 390.00,
     "category": "Conference",
     "business_justification": "Attending conference to present a paper"

@@ -50,20 +50,33 @@ components:
 
     ExpenseCreate:
       type: object
-      required: [employee_id, amount, category]
+      required: [date_of_expense, employee_id, amount, category, business_justification]
       properties:
+        date_of_expense: { type: string, format: date-time }
         employee_id: { type: string }
         amount: { type: number }
-        category: { type: string }
-        business_justification: { type: string, default: "" }
+        category: { type: string, enum: ["Travel", "Meals", "Conference", "Other"], default: "Other" }
+        business_justification: { type: string }
 
     ExpenseOut:
       type: object
-      required: [expense_id, status, submitted_at]
+      required: [expense_id, date_of_expense, employee_id, amount, category, status, submitted_at, updated_at]
       properties:
         expense_id: { type: string }
-        status: { type: string, enum: ["pending", "approved", "rejected"], default: "pending" }
+        date_of_expense: { type: string, format: date-time }
+        employee_id: { type: string }
+        amount: { type: number }
+        business_justification: { type: string }
+        category: { type: string, enum: ["Travel", "Meals", "Conference", "Other"], default: "Other" }
+
+        status: { type: string, enum: ["pending", "approved", "rejected", "admin-review"], default: "pending" }
+        decision_actor: { type: string, nullable: true }
+        decision_reason: { type: string, nullable: true }
+
+        receipt_path: { type: string, nullable: true }
+
         submitted_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
 
     ExpenseUpdate:
       type: object
@@ -362,8 +375,6 @@ paths:
                   path:
                     type: string
                     example: "documents/filename.pdf"
-                  download_url:
-                    type: string
 
   /documents/url:
     get:
@@ -439,5 +450,4 @@ paths:
                     type: boolean
                   path:
                     type: string
-
 
