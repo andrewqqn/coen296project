@@ -1,5 +1,6 @@
 import os
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.openapi.utils import get_openapi
 
@@ -12,6 +13,7 @@ init_firebase()
 from firebase_admin import auth
 
 from controller import employee_router, expense_router, audit_router, document_router
+from application import orchestrator_router
 
 security = HTTPBearer(auto_error=False)
 USE_AUTH_EMULATOR = os.getenv("USE_FIRESTORE_EMULATOR")
@@ -72,11 +74,21 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],  # Frontend URLs
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
+)
+
 # Register routers
 app.include_router(employee_router.router)
 app.include_router(expense_router.router)
 app.include_router(audit_router.router)
 app.include_router(document_router.router)
+app.include_router(orchestrator_router.router)
 
 
 @app.get("/")

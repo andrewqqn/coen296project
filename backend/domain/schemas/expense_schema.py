@@ -23,7 +23,7 @@ class ExpenseOut(BaseModel):
     decision_actor: str = None
     decision_reason: str = None
 
-    receipt_path: str
+    receipt_path: str | None = None
 
     submitted_at: datetime
     updated_at: datetime
