@@ -1,4 +1,4 @@
-from repositories import expense_repo
+from domain.repositories import expense_repo
 from services.document_service import upload_receipt
 from domain.schemas.expense_schema import ExpenseCreate, ExpenseOut
 from datetime import datetime
@@ -79,3 +79,6 @@ def update_expense(expense_id: str, data: dict):
 
 def delete_expense(expense_id):
     return expense_repo.delete(expense_id)
+
+def get_by_employee(employee_id: str):
+    return expense_repo.get_by_employee(employee_id)
