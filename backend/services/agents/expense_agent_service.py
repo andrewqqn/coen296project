@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Optional, Literal, List, Any, cast
 
 from pdf2image import convert_from_bytes
+from PIL import Image
 
 from pydantic import BaseModel
 from langchain_core.output_parsers import JsonOutputParser
@@ -138,11 +139,12 @@ def apply_static_rules(expense, receipt_summary):
     if amount > 500:
         return "R3", "MANUAL"
 
-    # R2 – already submitted today → MANUAL
-    if amount <= 500 and len(today_exp) >= 1:
+    # R2 – already submitted today (more than one expense) → MANUAL
+    # Note: today_exp includes the current expense being reviewed, so >= 2 means there are other expenses today
+    if amount <= 500 and len(today_exp) >= 2:
         return "R2", "MANUAL"
 
-    # R1 – safe approve
+    # R1 – safe approve (first expense of the day, <= $500)
     return "R1", "APPROVE"
 
 
@@ -162,16 +164,49 @@ def evaluate_and_maybe_auto_approve(expense_id: str):
 
     try:
         if expense.get("receipt_path"):
-            pdf_bytes = download_receipt(expense["receipt_path"])
-            base64_img_list = pdf_to_base64(pdf_bytes)
+            receipt_bytes = download_receipt(expense["receipt_path"])
+            logger.info(f"[AI] Downloaded receipt: {len(receipt_bytes)} bytes, first 20 bytes: {receipt_bytes[:20]}")
+            
+            # Check if it's a PDF or already an image
+            if receipt_bytes[:4] == b'%PDF':
+                # It's a PDF, convert to images
+                logger.info("[AI] Receipt is PDF, converting to JPEG")
+                base64_img_list = pdf_to_base64(receipt_bytes)
+            elif receipt_bytes[:2] == b'\xff\xd8':  # JPEG magic bytes
+                # It's already a JPEG
+                logger.info("[AI] Receipt is already JPEG")
+                base64_img_list = [base64.b64encode(receipt_bytes).decode("utf-8")]
+            elif receipt_bytes[:8] == b'\x89PNG\r\n\x1a\n':  # PNG magic bytes
+                # It's a PNG, convert to JPEG
+                logger.info("[AI] Receipt is PNG, converting to JPEG")
+                img = Image.open(BytesIO(receipt_bytes))
+                buf = BytesIO()
+                img.convert('RGB').save(buf, format='JPEG', quality=95)
+                jpeg_bytes = buf.getvalue()
+                base64_img_list = [base64.b64encode(jpeg_bytes).decode("utf-8")]
+            else:
+                # Try to open as generic image
+                logger.warning(f"[AI] Unknown file format, attempting generic image load. First bytes: {receipt_bytes[:20]}")
+                try:
+                    img = Image.open(BytesIO(receipt_bytes))
+                    logger.info(f"[AI] Successfully opened as {img.format} image, converting to JPEG")
+                    buf = BytesIO()
+                    img.convert('RGB').save(buf, format='JPEG', quality=95)
+                    jpeg_bytes = buf.getvalue()
+                    base64_img_list = [base64.b64encode(jpeg_bytes).decode("utf-8")]
+                except Exception as img_err:
+                    logger.error(f"[AI] Failed to open as image: {img_err}")
+                    receipt_summary = "(unsupported file format)"
 
             if base64_img_list:
                 receipt_summary = "receipt_image_attached"
+                logger.info(f"[AI] Successfully prepared {len(base64_img_list)} image(s) for AI review")
             else:
                 receipt_summary = "(receipt unreadable)"
         else:
             receipt_summary = "(no receipt provided)"
     except Exception as e:
+        logger.error(f"[AI] Receipt processing failed: {e}", exc_info=True)
         receipt_summary = f"(download failed: {e})"
 
     # -------- Static Rules ----------
@@ -361,9 +396,19 @@ EXAMPLE VALID OUTPUT (DO NOT COPY LITERALLY):
         image_b64 = None
         if isinstance(base64_img_list, list) and len(base64_img_list) > 0:
             image_b64 = base64_img_list[0]
-            save_base64_to_jpeg(image_b64, "page1.jpg")
+            # Validate base64 by trying to decode it
+            try:
+                test_decode = base64.b64decode(image_b64)
+                logger.info(f"[AI] Image validated, size: {len(test_decode)} bytes")
+                save_base64_to_jpeg(image_b64, "page1.jpg")
+            except Exception as decode_err:
+                logger.error(f"[AI] Invalid base64 encoding: {decode_err}")
+                raise ValueError("Invalid base64 image data")
         elif isinstance(base64_img_list, str):
             image_b64 = base64_img_list
+        
+        if not image_b64:
+            raise ValueError("No valid image data available for AI review")
 
         # Build the user message with the payload as compact JSON
         expense_prompt = f"""
@@ -376,20 +421,32 @@ EXAMPLE VALID OUTPUT (DO NOT COPY LITERALLY):
         {json.dumps(payload, indent=2)}
         """
 
-        inputs = [
-            {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
+        messages = [
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": [
-                {"type": "input_image", "image_url": f"data:image/jpeg;base64,{image_b64}"},
-                {"type": "input_text", "text": expense_prompt},
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{image_b64}"
+                    }
+                },
+                {
+                    "type": "text",
+                    "text": expense_prompt
+                }
             ]}
         ]
-        response = client.responses.create(
+        
+        logger.info("[AI] Sending request to OpenAI with image")
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
-            input=inputs
+            messages=messages,
+            max_tokens=1000
         )
 
-        print(response.output_text)
-        choice = response.output_text
+        logger.info("[AI] Received response from OpenAI")
+        print(response.choices[0].message.content)
+        choice = response.choices[0].message.content
         parsed = parser.parse(choice)
 
     except Exception as e:

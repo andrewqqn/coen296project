@@ -189,13 +189,13 @@ def register_expense_tools(agent: Agent, role: Literal["employee", "admin"]):
         return expense
 
     @agent.tool
-    async def create_new_expense(
+    def create_new_expense(
         ctx: RunContext[UserContext], 
         amount: float,
         category: str,
         description: str = "",
         date_of_expense: Optional[str] = None,
-        receipt_url: Optional[str] = None,
+        receipt_path: Optional[str] = None,
         employee_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
@@ -206,7 +206,7 @@ def register_expense_tools(agent: Agent, role: Literal["employee", "admin"]):
             category: The expense category (choose from: Travel, Meals, Conference, Other)
             description: Brief description/justification of the expense
             date_of_expense: Date of the expense in YYYY-MM-DD format (defaults to today if not provided)
-            receipt_url: Optional URL to the receipt document
+            receipt_path: Optional path to receipt in storage (e.g., "expense_receipts/file.pdf")
             employee_id: The employee ID (only for admin; employees create expenses for themselves)
         """
         from domain.schemas.expense_schema import ExpenseCreate
@@ -252,21 +252,10 @@ def register_expense_tools(agent: Agent, role: Literal["employee", "admin"]):
             date_of_expense=expense_date
         )
         
-        logger.info(f"Tool called: create_new_expense with data={expense_create.dict()}, receipt_url={receipt_url}")
+        logger.info(f"Tool called: create_new_expense with data={expense_create.dict()}, receipt_path={receipt_path}")
         
-        # Call the async create_expense function
-        result = await expense_service.create_expense(expense_create, receipt_file=None)
-        
-        # If a receipt_url was provided, update the expense with it
-        if receipt_url:
-            expense_id = result.expense_id if hasattr(result, 'expense_id') else result.get('expense_id')
-            if expense_id:
-                # Convert local:// URL to the actual path for storage
-                receipt_path = receipt_url.replace("local://", "") if receipt_url.startswith("local://") else receipt_url
-                expense_service.update_expense(expense_id, {"receipt_path": receipt_path})
-                logger.info(f"Updated expense {expense_id} with receipt_path: {receipt_path}")
-                # Refresh the result to include the updated receipt_path
-                result = expense_service.get_expense(expense_id)
+        # Call the unified create_expense function
+        result = expense_service.create_expense(expense_create, receipt_path=receipt_path)
         
         # Convert Pydantic model to dict for JSON serialization
         return result.dict() if hasattr(result, 'dict') else result
@@ -309,55 +298,6 @@ def register_expense_tools(agent: Agent, role: Literal["employee", "admin"]):
                 return {"error": "Access denied: You can only delete your own expenses"}
         
         return expense_service.delete_expense(expense_id)
-
-# Policy tools (list available to all, management only for admin)
-def register_policy_tools(agent: Agent, role: Literal["employee", "admin"]):
-    """Register policy tools based on role"""
-    
-    @agent.tool
-    def list_all_policies(ctx: RunContext[UserContext]) -> List[Dict[str, Any]]:
-        """
-        List all reimbursement policies in the system.
-        Use this when the user wants to see all policies or asks about policy information.
-        """
-        logger.info(f"Tool called: list_all_policies by {ctx.deps.role} user {ctx.deps.employee_id}")
-        return policy_service.list_policies()
-    
-    # Admin-only policy management tools
-    if role == "admin":
-        @agent.tool
-        def create_new_policy(ctx: RunContext[UserContext], data: Dict[str, Any]) -> Dict[str, Any]:
-            """
-            Create a new reimbursement policy in the system.
-            
-            Args:
-                data: Policy data including name, rules, limits, etc.
-            """
-            logger.info(f"Tool called: create_new_policy with data={data}")
-            return policy_service.create_policy(data)
-
-        @agent.tool
-        def update_existing_policy(ctx: RunContext[UserContext], policy_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
-            """
-            Update an existing policy's information.
-            
-            Args:
-                policy_id: The policy ID to update
-                data: Updated policy data
-            """
-            logger.info(f"Tool called: update_existing_policy with policy_id={policy_id}, data={data}")
-            return policy_service.update_policy(policy_id, data)
-
-        @agent.tool
-        def delete_existing_policy(ctx: RunContext[UserContext], policy_id: str) -> Dict[str, Any]:
-            """
-            Delete a policy from the system.
-            
-            Args:
-                policy_id: The policy ID to delete
-            """
-            logger.info(f"Tool called: delete_existing_policy with policy_id={policy_id}")
-            return policy_service.delete_policy(policy_id)
 
 # Admin-only audit log tools
 def register_audit_tools(agent: Agent):
@@ -616,14 +556,12 @@ async def process_query(
             # Admin gets all tools
             register_admin_employee_tools(agent)
             register_expense_tools(agent, role)
-            register_policy_tools(agent, role)
             register_audit_tools(agent)
             register_receipt_tools(agent)
             logger.info("Registered all tools for admin user")
         else:
             # Employee gets limited tools
             register_expense_tools(agent, role)
-            register_policy_tools(agent, role)
             register_receipt_tools(agent)
             logger.info("Registered employee-level tools")
         
