@@ -1,7 +1,7 @@
 import os
 import glob
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, storage
 
 from config import *
 from dotenv import load_dotenv
@@ -60,3 +60,8 @@ def init_firebase():
 def get_firestore_client():
     init_firebase()
     return firestore.client()
+
+def get_storage_bucket():
+    """Get Firebase Storage bucket instance"""
+    init_firebase()
+    return storage.bucket()
