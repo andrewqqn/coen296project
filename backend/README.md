@@ -102,7 +102,7 @@ Paste that token into the **“Authorize”** dialog in Swagger UI
 ## Create Employee
 ```
 {
-  "authentication_id": "JCWWsSPHT8ajgEAvYj09xJV8APqT",
+  "authentication_id": "A4fLqcyuRXCPklqCdYKL7WuGQIS7",
   "email": "yzeng@scu.edu",
   "name": "Yulin Zeng",
   "position": "research scientist",

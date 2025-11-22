@@ -22,8 +22,8 @@ async def create_expense(
     data_dict = json.loads(expense_data)
     expense_create = ExpenseCreate(**data_dict)
 
-    # Step 2: send to service
-    return await expense_service.create_expense(expense_create, receipt)
+    # Step 2: send to service with file handling
+    return await expense_service.create_expense_with_file(expense_create, receipt)
 
 @router.get("/{expense_id}", response_model=ExpenseOut)
 def get_expense(expense_id: str):
