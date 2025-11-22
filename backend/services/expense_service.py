@@ -30,7 +30,6 @@ async def create_expense(expense_create: ExpenseCreate, receipt_file):
         "business_justification": expense_create.business_justification,
         "receipt_path": file_path,
         "status": "pending",
-        "decision_type": "",
         "decision_reason": "",
         "submitted_at": datetime.utcnow().isoformat(),
         "updated_at": datetime.utcnow().isoformat(),

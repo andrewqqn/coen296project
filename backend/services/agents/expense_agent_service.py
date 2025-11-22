@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Optional, Literal, List, Any, cast
 
 from pdf2image import convert_from_bytes
-
+from dateutil import parser
 from pydantic import BaseModel
 from langchain_core.output_parsers import JsonOutputParser
 from openai import OpenAI
@@ -45,23 +45,35 @@ def to_json_safe(obj):
 
     return obj
 
+# ============================================================
+# Date Normalization
+# ============================================================
+
+def normalize_date_only(value):
+    if not value:
+        return value
+    try:
+        dt = parser.parse(value)
+        return dt.strftime("%Y-%m-%d")
+    except:
+        return value
+
 
 # ============================================================
 # Decision Schema
 # ============================================================
 class ExpenseDecision(BaseModel):
     decision: Literal["APPROVE", "REJECT", "MANUAL"]
-    rule: Optional[str] = None
-    reason: str
-    confidence: float
+    rule: Optional[str] = ""
+    reason: str = ""
+    confidence: float = 0.0
 
-    merchant_name: Optional[str] = None
-    transaction_date: Optional[str] = None
-    transaction_time: Optional[str] = None
-    total_amount: Optional[float] = None
-    subtotal: Optional[float] = None
-    tax: Optional[float] = None
-    payment_method: Optional[str] = None
+    merchant_name: Optional[str] = ""
+    date_of_expense: Optional[str] = ""
+    total_amount: Optional[str] = ""
+    subtotal: Optional[str] = ""
+    tax: Optional[str] = ""
+    payment_method: Optional[str] = ""
 
 
 
@@ -139,7 +151,7 @@ def apply_static_rules(expense, receipt_summary):
         return "R3", "MANUAL"
 
     # R2 – already submitted today → MANUAL
-    if amount <= 500 and len(today_exp) >= 1:
+    if amount <= 500 and len(today_exp) > 1:
         return "R2", "MANUAL"
 
     # R1 – safe approve
@@ -182,6 +194,9 @@ def evaluate_and_maybe_auto_approve(expense_id: str):
     snippets = to_json_safe(query_vector_db(q, top_k=3))
 
     # -------- Prompt Payload --------
+    expense_date = expense.get('date_of_expense')
+    expense['date_of_expense'] = normalize_date_only(expense_date)
+
     payload = to_json_safe({
         "expense": expense,
         "receipt_summary": receipt_summary,
@@ -232,7 +247,7 @@ REIMBURSEMENT POLICY SUMMARY (STRICT RULES TO FOLLOW)
 ----------------------------------------
 A valid receipt MUST clearly show:
 - vendor name 
-- transaction date
+- date
 - itemized list of charges
 - total amount
 - taxes/fees if applicable
@@ -244,7 +259,6 @@ the form:
 
 OCR consistency checks:
 - OCR amount MUST match submitted amount
-- OCR date MUST match submitted date
 If these cannot be confidently extracted:
 → decision = "MANUAL", rule = "OCR"
 
@@ -273,7 +287,7 @@ Auto-approval ONLY IF ALL conditions hold:
 1. Amount ≤ $500
 2. First submission of employee on that calendar day
 3. Receipt readable + valid
-4. OCR matches metadata (amount/date)
+4. OCR matches metadata
 5. Category is reimbursable
 6. Policy retrieval shows no conflict
 7. Expense appears reasonable
@@ -309,16 +323,22 @@ Any amount > $500:
 ----------------------------------------
 8. Rule R4 — Invalid Documentation
 ----------------------------------------
-Missing or unreadable receipt, OCR mismatch, missing category/amount/date:
+Missing or unreadable receipt, OCR mismatch:
 → REJECT
 → rule = "R4"
 
+Note:
+- R4 Date Mismatch Rule:
+    * A mismatch between transaction_date, date_of_expense and reported_date is NOT grounds for rejection.
+    * Reject ONLY IF:
+         - the receipt date is missing.
+
 When dates or amounts mismatch, you MUST explicitly state both values in the "reason".
 For example:
-"The submitted date (2025-01-01) does not match the receipt date (2024-12-30)."
+"The amount 500.0 does not match the reported expense amount 390.0."
 
 Do NOT use vague descriptions like "date mismatch" or "receipt inconsistent".
-Always show the exact conflicting fields: submitted_date=X, receipt_date=Y.
+Always show the exact conflicting fields.
 
 ----------------------------------------
 9. Conflict Resolution
@@ -338,19 +358,32 @@ If ANY uncertainty arises:
 - confidence ≤ 0.75
 
 ===============================================================================
-EXAMPLE VALID OUTPUT (DO NOT COPY LITERALLY):
+EXAMPLE VALID OUTPUT for REJECT (DO NOT COPY LITERALLY):
 {{
   "decision": "REJECT",
   "rule": "R4",
-  "reason": "Date mismatch: submitted_date=2025-01-10, receipt_date=2025-01-08.",
-  "confidence": 0.91,
+  "reason": "Amount mismatch: submitted_amount=390.0, receipt_amount=10.0.",
+  "confidence": "0.91",
   "merchant_name": "Starbucks",
-  "transaction_date": "2025-01-08",
-  "transaction_time": "14:35",
-  "total_amount": 12.45,
-  "subtotal": 11.00,
-  "tax": 1.45,
-  "payment_method": null
+  "date_of_expense": "2025-01-08",
+  "total_amount": "12.45",
+  "subtotal": "11.00",
+  "tax": "1.45",
+  "payment_method": "Visa 9264"
+}}
+
+EXAMPLE VALID OUTPUT for APPROVE (DO NOT COPY LITERALLY):
+{{
+  "decision": "APPROVE",
+  "rule": "R1",
+  "reason": "Receipt is valid and matches the submitted details (merchant, date, amount). The expense amount is within policy limits and the charge is reasonable for the stated business purpose, with no conflicting rules triggered."
+  "confidence": 1.0,
+  "merchant_name": "The American Society of Mechanical Engineers",
+  "date_of_expense": "2025-04-22",
+  "total_amount": "390.00",
+  "subtotal": "390.00",
+  "tax": "0.00",
+  "payment_method": "Visa 9240"
 }}
 ===============================================================================
     """
@@ -369,7 +402,7 @@ EXAMPLE VALID OUTPUT (DO NOT COPY LITERALLY):
         expense_prompt = f"""
         The receipt image(s) for this expense are provided separately above as input_image content.
 
-        Below are the structured details of the expense, extracted metadata, 
+        Below are the structured details of the expense, extracted metadata,
         policy retrieval context, and pre-evaluated static rules:
 
         Expense details (JSON-safe structure):
@@ -389,8 +422,9 @@ EXAMPLE VALID OUTPUT (DO NOT COPY LITERALLY):
         )
 
         print(response.output_text)
-        choice = response.output_text
-        parsed = parser.parse(choice)
+        raw_str = response.output_text
+        raw_dict = json.loads(raw_str)
+        parsed = ExpenseDecision(**raw_dict)
 
     except Exception as e:
         logger.error(f"[AI] JSON parse failed → fallback to MANUAL. Error: {e}")
@@ -426,6 +460,7 @@ EXAMPLE VALID OUTPUT (DO NOT COPY LITERALLY):
     return parsed
 
 
+
 # ============================================================
 # Hook
 # ============================================================
@@ -437,4 +472,4 @@ def auto_review_on_create(expense_id: str):
 
 
 if __name__ == "__main__":
-    auto_review_on_create("WLIR9Bt4V9EMPtFD8Mug")
+    auto_review_on_create("9cANVNrPyRBIffVthvYL")

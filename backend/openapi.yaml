@@ -50,20 +50,33 @@ components:
 
     ExpenseCreate:
       type: object
-      required: [employee_id, amount, category]
+      required: [date_of_expense, employee_id, amount, category, business_justification]
       properties:
+        date_of_expense: { type: string, format: date-time }
         employee_id: { type: string }
         amount: { type: number }
-        category: { type: string }
-        business_justification: { type: string, default: "" }
+        category: { type: string, enum: ["Travel", "Meals", "Conference", "Other"], default: "Other" }
+        business_justification: { type: string }
 
     ExpenseOut:
       type: object
-      required: [expense_id, status, submitted_at]
+      required: [expense_id, date_of_expense, employee_id, amount, category, status, submitted_at, updated_at]
       properties:
         expense_id: { type: string }
-        status: { type: string, enum: ["pending", "approved", "rejected"], default: "pending" }
+        date_of_expense: { type: string, format: date-time }
+        employee_id: { type: string }
+        amount: { type: number }
+        business_justification: { type: string }
+        category: { type: string, enum: ["Travel", "Meals", "Conference", "Other"], default: "Other" }
+
+        status: { type: string, enum: ["pending", "approved", "rejected", "admin-review"], default: "pending" }
+        decision_actor: { type: string, nullable: true }
+        decision_reason: { type: string, nullable: true }
+
+        receipt_path: { type: string, nullable: true }
+
         submitted_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
 
     ExpenseUpdate:
       type: object
@@ -334,40 +347,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/AuditLogOut'
 
-  ###########################
-  # Orchestrator Section
-  ###########################
-  /orchestrator/:
-    post:
-      tags: [Orchestrator]
-      summary: Process natural language query
-      description: |
-        Process a natural language query and route it to the appropriate tools.
-        The orchestrator uses GPT-4 to understand the user's intent and automatically
-        calls the necessary functions to fulfill the request.
-        
-        Examples of queries:
-        - "List all employees"
-        - "Show me the expense with ID abc123"
-        - "Create a new employee named John Doe with email john@example.com"
-        - "What are all the reimbursement policies?"
-        - "Show me recent audit logs"
-        - "Update employee emp123 to change their department to Engineering"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/QueryRequest'
-      responses:
-        '200':
-          description: Query processed successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/QueryResponse'
-        '500':
-          description: Error processing query
   /documents/upload:
     post:
       tags:
@@ -396,8 +375,6 @@ paths:
                   path:
                     type: string
                     example: "documents/filename.pdf"
-                  download_url:
-                    type: string
 
   /documents/url:
     get:
@@ -473,37 +450,4 @@ paths:
                     type: boolean
                   path:
                     type: string
-
-    QueryRequest:
-      type: object
-      required:
-        - query
-      properties:
-        query:
-          type: string
-          description: Natural language query to process
-          example: "Show me all employees"
-
-    QueryResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          description: Whether the query was processed successfully
-        response:
-          type: string
-          nullable: true
-          description: The response to the query
-        tools_used:
-          type: array
-          items:
-            type: string
-          description: List of tools/functions used to process the query
-        query:
-          type: string
-          description: The original query that was processed
-        error:
-          type: string
-          nullable: true
-          description: Error message if the query failed
 
