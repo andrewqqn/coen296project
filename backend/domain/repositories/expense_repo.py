@@ -1,8 +1,10 @@
 from infrastructure.firebase_client import get_firestore_client
 from google.cloud.firestore_v1.base_query import FieldFilter
+from dateutil import parser
 
 db = get_firestore_client()
 COLLECTION = "expenses"
+
 
 def get_all():
     return [doc.to_dict() | {"expense_id": doc.id} for doc in db.collection(COLLECTION).stream()]

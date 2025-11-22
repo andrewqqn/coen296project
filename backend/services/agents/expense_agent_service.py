@@ -179,11 +179,13 @@ def evaluate_and_maybe_auto_approve(expense_id: str):
 
             if base64_img_list:
                 receipt_summary = "receipt_image_attached"
+                logger.info(f"[AI] Successfully prepared {len(base64_img_list)} image(s) for AI review")
             else:
                 receipt_summary = "(receipt unreadable)"
         else:
             receipt_summary = "(no receipt provided)"
     except Exception as e:
+        logger.error(f"[AI] Receipt processing failed: {e}", exc_info=True)
         receipt_summary = f"(download failed: {e})"
 
     # -------- Static Rules ----------
@@ -469,7 +471,3 @@ def auto_review_on_create(expense_id: str):
         evaluate_and_maybe_auto_approve(expense_id)
     except Exception as e:
         logger.error(f"[AUTO_REVIEW_ERROR] {e}")
-
-
-if __name__ == "__main__":
-    auto_review_on_create("9cANVNrPyRBIffVthvYL")

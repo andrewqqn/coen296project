@@ -22,6 +22,21 @@ def upload_receipt(file_name: str, file_data: bytes):
 
 
 def download_receipt(file_path: str):
+    """Download receipt from Firebase Storage or local filesystem"""
+    import os
+    
+    # Handle local:// paths (from orchestrator file uploads)
+    if file_path.startswith("local://"):
+        local_path = file_path.replace("local://", "")
+        full_path = os.path.join(os.getcwd(), local_path)
+        
+        if not os.path.exists(full_path):
+            raise FileNotFoundError(f"Local file not found: {full_path}")
+        
+        with open(full_path, "rb") as f:
+            return f.read()
+    
+    # Otherwise download from Firebase Storage
     return download_document(file_path)
 
 

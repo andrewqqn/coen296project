@@ -12,7 +12,7 @@ class Expense:
     business_justification: str
     category: Literal["Travel", "Meals", "Conference", "Other"] = "Other"
 
-    status: Literal["pending", "approved", "rejected"] = "pending"
+    status: Literal["pending", "approved", "rejected", "admin_review"] = "pending"
     decision_actor: Literal["AI", "Human"] = "AI"
     decision_reason: str = None
 

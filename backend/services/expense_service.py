@@ -5,50 +5,37 @@ from datetime import datetime
 from services.agents.expense_agent_service import auto_review_on_create
 
 
-async def create_expense(expense_create: ExpenseCreate, receipt_file):
+def create_expense(expense_create: ExpenseCreate, receipt_path: str = None):
     """
-    Create a new expense record with receipt upload and Firestore insertion.
+    Create a new expense record with optional receipt path.
     Business logic lives here (not repo).
+    
+    Args:
+        expense_create: Expense data
+        receipt_path: Optional path to already-uploaded receipt in storage
     """
-
-    # -----------------------------
-    # Step 1 — Upload receipt file
-    # -----------------------------
-    file_name = f"{expense_create.employee_id}_{datetime.utcnow().timestamp()}_{receipt_file.filename}"
-    file_data = await receipt_file.read()
-    receipt_path = upload_receipt(file_name, file_data)
-    file_path = receipt_path["path"]
-
-    # -----------------------------
-    # Step 2 — Construct Firestore data
-    # -----------------------------
+    # Construct Firestore data
     data = {
         "employee_id": expense_create.employee_id,
         "date_of_expense": expense_create.date_of_expense,
         "amount": expense_create.amount,
         "category": expense_create.category,
         "business_justification": expense_create.business_justification,
-        "receipt_path": file_path,
+        "receipt_path": receipt_path,
         "status": "pending",
         "decision_reason": "",
         "submitted_at": datetime.utcnow().isoformat(),
         "updated_at": datetime.utcnow().isoformat(),
     }
 
-    # -----------------------------
-    # Step 3 — Insert into Firestore (repo)
-    # -----------------------------
+    # Insert into Firestore
     expense_id = expense_repo.create(data)
 
-    # # -----------------------------
-    # # Step 4 — (Future) trigger AI auto-review
-    #
-    # # -----------------------------
-    auto_review_on_create(expense_id=expense_id)
+    # Trigger AI auto-review if there's a receipt
+    if receipt_path:
+        auto_review_on_create(expense_id=expense_id)
 
-    # -----------------------------
-    # Step 5 — Return response
-    # -----------------------------
+    # Return response
     return ExpenseOut(
         expense_id=expense_id,
         date_of_expense=expense_create.date_of_expense,
@@ -59,11 +46,29 @@ async def create_expense(expense_create: ExpenseCreate, receipt_file):
         status="pending",
         decision_actor="",
         decision_reason="",
-
         receipt_path=data["receipt_path"],
         submitted_at=data["submitted_at"],
         updated_at=data["updated_at"],
     )
+
+
+async def create_expense_with_file(expense_create: ExpenseCreate, receipt_file):
+    """
+    Create expense with file upload handling.
+    Used by REST API endpoint that accepts multipart/form-data.
+    
+    Args:
+        expense_create: Expense data
+        receipt_file: UploadFile object from FastAPI
+    """
+    # Upload receipt file
+    file_name = f"{expense_create.employee_id}_{datetime.utcnow().timestamp()}_{receipt_file.filename}"
+    file_data = await receipt_file.read()
+    receipt_result = upload_receipt(file_name, file_data)
+    receipt_path = receipt_result["path"]
+    
+    # Create expense with the uploaded receipt path
+    return create_expense(expense_create, receipt_path=receipt_path)
 
 def list_expenses():
     return expense_repo.get_all()
