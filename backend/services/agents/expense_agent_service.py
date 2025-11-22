@@ -76,15 +76,6 @@ class ExpenseDecision(BaseModel):
     payment_method: Optional[str] = ""
 
 
-    merchant_name: Optional[str] = None
-    transaction_date: Optional[str] = None
-    transaction_time: Optional[str] = None
-    total_amount: Optional[float] = None
-    subtotal: Optional[float] = None
-    tax: Optional[float] = None
-    payment_method: Optional[str] = None
-
-
 
 parser = JsonOutputParser(pydantic_object=ExpenseDecision)
 format_instructions = parser.get_format_instructions()
@@ -480,7 +471,3 @@ def auto_review_on_create(expense_id: str):
         evaluate_and_maybe_auto_approve(expense_id)
     except Exception as e:
         logger.error(f"[AUTO_REVIEW_ERROR] {e}")
-
-
-if __name__ == "__main__":
-    auto_review_on_create("9cANVNrPyRBIffVthvYL")
