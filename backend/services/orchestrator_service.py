@@ -211,6 +211,7 @@ def register_expense_tools(agent: Agent, role: Literal["employee", "admin"]):
         """
         from domain.schemas.expense_schema import ExpenseCreate
         from datetime import datetime
+        import time
         
         # For employees, always use their own employee_id
         if ctx.deps.role == "employee":
@@ -258,7 +259,46 @@ def register_expense_tools(agent: Agent, role: Literal["employee", "admin"]):
         result = expense_service.create_expense(expense_create, receipt_path=receipt_path)
         
         # Convert Pydantic model to dict for JSON serialization
-        return result.dict() if hasattr(result, 'dict') else result
+        expense_dict = result.dict() if hasattr(result, 'dict') else result
+        expense_id = expense_dict.get('expense_id') or expense_dict.get('id')
+        
+        # Wait for AI review to complete (with timeout)
+        logger.info(f"Waiting for AI review to complete for expense {expense_id}")
+        max_wait_time = 30  # seconds
+        poll_interval = 1  # second
+        elapsed_time = 0
+        
+        while elapsed_time < max_wait_time:
+            time.sleep(poll_interval)
+            elapsed_time += poll_interval
+            
+            # Fetch the updated expense
+            updated_expense = expense_service.get_expense(expense_id)
+            
+            if updated_expense:
+                status = updated_expense.get('status')
+                decision_actor = updated_expense.get('decision_actor')
+                
+                # Check if AI has made a decision
+                if decision_actor == 'AI' and status in ['approved', 'rejected', 'admin-review']:
+                    logger.info(f"AI review completed with status: {status}")
+                    
+                    # Add review result to the response
+                    updated_expense['review_completed'] = True
+                    updated_expense['review_status'] = status
+                    updated_expense['review_reason'] = updated_expense.get('decision_reason', '')
+                    updated_expense['expense_id'] = expense_id
+                    
+                    return updated_expense
+        
+        # If we timeout, return the expense with a pending status
+        logger.warning(f"AI review timeout for expense {expense_id}")
+        expense_dict['review_completed'] = False
+        expense_dict['review_status'] = 'pending'
+        expense_dict['review_reason'] = 'AI review is taking longer than expected'
+        expense_dict['expense_id'] = expense_id
+        
+        return expense_dict
 
     @agent.tool
     def update_existing_expense(ctx: RunContext[UserContext], expense_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -604,8 +644,50 @@ async def process_query(
         # Extract the response - access the output attribute which contains the actual output
         response_text = result.output
         
-        # Get information about which tools were called
+        # Get information about which tools were called and extract expense review results
         tools_used = []
+        expense_review_result = None
+        
+        # Parse all messages to find tool calls and their results
+        all_messages = result.all_messages()
+        for message in all_messages:
+            # Check for tool return messages (these contain the tool results)
+            if hasattr(message, 'parts'):
+                for part in message.parts:
+                    # Check if this is a tool return with expense creation data
+                    if hasattr(part, 'tool_name') and part.tool_name == 'create_new_expense':
+                        tools_used.append('create_new_expense')
+                    
+                    # Check if this part contains the tool return content
+                    if hasattr(part, 'content') and isinstance(part.content, dict):
+                        tool_result = part.content
+                        # Check if this is an expense with review information
+                        if tool_result.get('review_completed') is not None:
+                            expense_review_result = {
+                                'expense_id': tool_result.get('expense_id') or tool_result.get('id'),
+                                'status': tool_result.get('review_status') or tool_result.get('status'),
+                                'reason': tool_result.get('review_reason') or tool_result.get('decision_reason', ''),
+                                'amount': tool_result.get('amount'),
+                                'category': tool_result.get('category'),
+                                'completed': tool_result.get('review_completed'),
+                                'decision_actor': tool_result.get('decision_actor')
+                            }
+        
+        # Enhance the response with review outcome if an expense was created
+        if expense_review_result:
+            if expense_review_result['completed']:
+                status = expense_review_result['status']
+                amount = expense_review_result['amount']
+                reason = expense_review_result['reason']
+                
+                if status == 'approved':
+                    response_text += f"\n\n✅ **Expense Approved!**\nYour expense of ${amount} has been automatically approved by our AI system."
+                elif status == 'rejected':
+                    response_text += f"\n\n❌ **Expense Rejected**\nYour expense of ${amount} was rejected. Reason: {reason}"
+                elif status == 'admin-review':
+                    response_text += f"\n\n⏳ **Manual Review Required**\nYour expense of ${amount} has been flagged for manual review by an administrator. Reason: {reason}"
+            else:
+                response_text += f"\n\n⏳ **Review Pending**\nYour expense has been submitted and is being reviewed. Please check back shortly."
         
         logger.info(f"Query processed successfully. Response length: {len(response_text)}")
         
@@ -614,7 +696,8 @@ async def process_query(
             "response": response_text,
             "tools_used": tools_used,
             "query": query,
-            "user_role": role
+            "user_role": role,
+            "expense_review": expense_review_result
         }
         
     except Exception as e:
