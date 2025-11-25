@@ -23,4 +23,11 @@ def delete(emp_id: str):
     db.collection(COLLECTION).document(emp_id).delete()
     return {"deleted": True, "employee_id": emp_id}
 
+def get_by_authentication_id(auth_id: str):
+    """Get employee by Firebase authentication ID"""
+    docs = db.collection(COLLECTION).where("authentication_id", "==", auth_id).limit(1).stream()
+    for doc in docs:
+        return doc.to_dict() | {"employee_id": doc.id}
+    return None
+
 
