@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional, Literal
 
 @dataclass
-class AuditLog:
-    actor: str
-    log: str = ""
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+class BankAccount:
+    holder_name: str = None
+    bank_account: str = None
+    email: str = None

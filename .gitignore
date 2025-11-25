@@ -53,6 +53,9 @@ wheels/
 gmail_oauth_credentials.json
 gmail_token.json
 
+# Uploaded files (receipts, documents)
+backend/uploads/
+
 # Pytest
 .pytest_cache/
 .coverage
@@ -74,3 +77,8 @@ yarn-debug.log*
 yarn-error.log*
 
 gen/
+/backend/test/sample_expenses/Hotel_Westin_671.64.pdf
+/backend/test/sample_expenses/registration_fee_390.00.pdf
+/backend/expensense-8110a-firebase-adminsdk-fbsvc-e542a903fb.json
+/.chroma_store/
+/backend/.chroma_store/
