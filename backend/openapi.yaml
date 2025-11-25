@@ -1,11 +1,10 @@
 openapi: 3.0.3
 info:
-  title: Expense Reimbursement System API
-  version: 1.0.0
-  description: >
-    Secure API for managing Employees, Expenses, Policies, and Audit Logs.  
-    🔒 All endpoints require a valid Firebase ID token obtained after Google Sign-In.
-
+  title: Expense Reimbursement System API (Synced Schemas)
+  version: 2.0.0
+  description: |
+    API definitions generated from current Pydantic schemas and routers.
+    Request and response bodies strictly match the Python schema definitions used by the FastAPI routers.
 servers:
   - url: https://localhost:8081/api/v1
     description: Local test server
@@ -13,27 +12,121 @@ servers:
 security:
   - firebaseAuth: []
 
-tags:
-  - name: Employee
-    description: Manage employee information
-  - name: Expense
-    description: Submit and track expenses
-  - name: Policy
-    description: Define and update reimbursement policies
-  - name: AuditLog
-    description: System activity logs for auditing
-  - name: Orchestrator
-    description: Natural language query interface powered by AI
+components:
+  securitySchemes:
+    firebaseAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: FirebaseIDToken
+      description: |
+        Provide Firebase ID Token in the Authorization header.
+        Example: `Bearer eyJhbGciOiJ...`
+
+  schemas:
+    EmployeeCreate:
+      type: object
+      required: [authentication_id, email, name, position, role]
+      properties:
+        authentication_id: { type: string }
+        email: { type: string, format: email }
+        name: { type: string }
+        position: { type: string }
+        role: { type: string, enum: ["employee", "admin"], default: "employee" }
+        bank_account: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+
+    EmployeeUpdate:
+      # Same shape as EmployeeCreate (used for PATCH)
+      allOf:
+        - $ref: '#/components/schemas/EmployeeCreate'
+
+    EmployeeOut:
+      allOf:
+        - $ref: '#/components/schemas/EmployeeCreate'
+        - type: object
+          required: [employee_id]
+          properties:
+            employee_id: { type: string }
+
+    ExpenseCreate:
+      type: object
+      required: [date_of_expense, employee_id, amount, category, business_justification]
+      properties:
+        date_of_expense: { type: string, format: date-time }
+        employee_id: { type: string }
+        amount: { type: number }
+        category: { type: string, enum: ["Travel", "Meals", "Conference", "Other"], default: "Other" }
+        business_justification: { type: string }
+
+    ExpenseOut:
+      type: object
+      required: [expense_id, date_of_expense, employee_id, amount, category, status, submitted_at, updated_at]
+      properties:
+        expense_id: { type: string }
+        date_of_expense: { type: string, format: date-time }
+        employee_id: { type: string }
+        amount: { type: number }
+        business_justification: { type: string }
+        category: { type: string, enum: ["Travel", "Meals", "Conference", "Other"], default: "Other" }
+
+        status: { type: string, enum: ["pending", "approved", "rejected", "admin-review"], default: "pending" }
+        decision_actor: { type: string, nullable: true }
+        decision_reason: { type: string, nullable: true }
+
+        receipt_path: { type: string, nullable: true }
+
+        submitted_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ExpenseUpdate:
+      type: object
+      required: [expense_id, date_of_expense, employee_id, amount, business_justification, category]
+      properties:
+        expense_id: { type: string }
+        date_of_expense: { type: string, format: date-time }
+        employee_id: { type: string }
+        amount: { type: number }
+        business_justification: { type: string }
+        category: { type: string, enum: ["Travel", "Meals", "Conference", "Other"], default: "Other" }
+
+        status: { type: string, enum: ["pending", "approved", "rejected"], default: "pending" }
+        decision_actor: { type: string, enum: ["AI", "Human"], default: "AI" }
+        decision_reason: { type: string, nullable: true }
+
+        receipt_path: { type: string, nullable: true }
+
+        submitted_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    AuditLogCreate:
+      type: object
+      required: [actor]
+      properties:
+        actor: { type: string }
+        log: { type: string, nullable: true, default: "" }
+
+    AuditLogOut:
+      allOf:
+        - $ref: '#/components/schemas/AuditLogCreate'
+        - type: object
+          required: [timestamp]
+          properties:
+            timestamp: { type: string, format: date-time }
+
+    ReceiptUrl:
+      type: object
+      required: [expense_id, url]
+      properties:
+        expense_id: { type: string }
+        url: { type: string, format: uri }
 
 paths:
-
-  ###########################
-  # Employee Section
-  ###########################
   /employees:
     get:
       tags: [Employee]
       summary: List all employees
+      security:
+        - firebaseAuth: []
       responses:
         '200':
           description: List of employees
@@ -42,24 +135,32 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Employee'
+                  $ref: '#/components/schemas/EmployeeOut'
     post:
       tags: [Employee]
       summary: Create new employee
+      security:
+        - firebaseAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Employee'
+              $ref: '#/components/schemas/EmployeeCreate'
       responses:
         '201':
           description: Employee created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeOut'
 
   /employees/{employee_id}:
     get:
       tags: [Employee]
       summary: Get employee by ID
+      security:
+        - firebaseAuth: []
       parameters:
         - name: employee_id
           in: path
@@ -71,10 +172,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Employee'
+                $ref: '#/components/schemas/EmployeeOut'
+        '404':
+          description: Employee not found
     patch:
       tags: [Employee]
       summary: Update employee info
+      security:
+        - firebaseAuth: []
       parameters:
         - name: employee_id
           in: path
@@ -85,13 +190,19 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Employee'
+              $ref: '#/components/schemas/EmployeeUpdate'
       responses:
         '200':
           description: Employee updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeOut'
     delete:
       tags: [Employee]
       summary: Delete employee
+      security:
+        - firebaseAuth: []
       parameters:
         - name: employee_id
           in: path
@@ -99,15 +210,14 @@ paths:
           schema: { type: string }
       responses:
         '204':
-          description: Employee deleted
+          description: Employee deleted (no content)
 
-  ###########################
-  # Expense Section
-  ###########################
   /expenses:
     get:
       tags: [Expense]
       summary: List all expenses
+      security:
+        - firebaseAuth: []
       responses:
         '200':
           description: List of expenses
@@ -116,24 +226,42 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Expense'
+                  $ref: '#/components/schemas/ExpenseOut'
+
     post:
       tags: [Expense]
-      summary: Create new expense
+      summary: Create new expense (multipart form with JSON string + receipt file)
+      security:
+        - firebaseAuth: []
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Expense'
+              type: object
+              required: [expense_data, receipt]
+              properties:
+                # Router expects a form field 'expense_data' containing the JSON string for ExpenseCreate
+                expense_data:
+                  type: string
+                  description: JSON string matching the ExpenseCreate schema
+                receipt:
+                  type: string
+                  format: binary
       responses:
         '201':
           description: Expense created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseOut'
 
   /expenses/{expense_id}:
     get:
       tags: [Expense]
       summary: Get expense by ID
+      security:
+        - firebaseAuth: []
       parameters:
         - name: expense_id
           in: path
@@ -145,10 +273,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Expense'
+                $ref: '#/components/schemas/ExpenseOut'
+        '404':
+          description: Expense not found
     patch:
       tags: [Expense]
       summary: Update expense
+      security:
+        - firebaseAuth: []
       parameters:
         - name: expense_id
           in: path
@@ -159,13 +291,19 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Expense'
+              $ref: '#/components/schemas/ExpenseUpdate'
       responses:
         '200':
           description: Expense updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseOut'
     delete:
       tags: [Expense]
       summary: Delete expense
+      security:
+        - firebaseAuth: []
       parameters:
         - name: expense_id
           in: path
@@ -173,74 +311,14 @@ paths:
           schema: { type: string }
       responses:
         '204':
-          description: Expense deleted
+          description: Expense deleted (no content)
 
-  ###########################
-  # Policy Section
-  ###########################
-  /policies:
-    get:
-      tags: [Policy]
-      summary: List reimbursement policies
-      responses:
-        '200':
-          description: List of policies
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ReimbursementPolicy'
-    post:
-      tags: [Policy]
-      summary: Create new policy
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReimbursementPolicy'
-      responses:
-        '201':
-          description: Policy created
-
-  /policies/{policy_id}:
-    patch:
-      tags: [Policy]
-      summary: Update policy
-      parameters:
-        - name: policy_id
-          in: path
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReimbursementPolicy'
-      responses:
-        '200':
-          description: Policy updated
-    delete:
-      tags: [Policy]
-      summary: Delete policy
-      parameters:
-        - name: policy_id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '204':
-          description: Policy deleted
-
-  ###########################
-  # Audit Log Section
-  ###########################
   /audit_logs:
     get:
       tags: [AuditLog]
       summary: List all audit logs
+      security:
+        - firebaseAuth: []
       responses:
         '200':
           description: List of audit logs
@@ -249,153 +327,127 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/AuditLog'
+                  $ref: '#/components/schemas/AuditLogOut'
     post:
       tags: [AuditLog]
       summary: Record new audit log entry
+      security:
+        - firebaseAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AuditLog'
+              $ref: '#/components/schemas/AuditLogCreate'
       responses:
         '201':
           description: Audit log created
-
-  ###########################
-  # Orchestrator Section
-  ###########################
-  /orchestrator/:
-    post:
-      tags: [Orchestrator]
-      summary: Process natural language query
-      description: |
-        Process a natural language query and route it to the appropriate tools.
-        The orchestrator uses GPT-4 to understand the user's intent and automatically
-        calls the necessary functions to fulfill the request.
-        
-        Examples of queries:
-        - "List all employees"
-        - "Show me the expense with ID abc123"
-        - "Create a new employee named John Doe with email john@example.com"
-        - "What are all the reimbursement policies?"
-        - "Show me recent audit logs"
-        - "Update employee emp123 to change their department to Engineering"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/QueryRequest'
-      responses:
-        '200':
-          description: Query processed successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/QueryResponse'
-        '500':
-          description: Error processing query
+                $ref: '#/components/schemas/AuditLogOut'
+
+  /documents/upload:
+    post:
+      tags:
+        - Documents
+      summary: Upload a document
+      description: >
+        Upload any kind of document to the storage backend (Firebase Storage Emulator or Production).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Document uploaded successfully
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  detail: { type: string }
+                  path:
+                    type: string
+                    example: "documents/filename.pdf"
 
-components:
-  securitySchemes:
-    firebaseAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: FirebaseIDToken
-      description: |
-        Paste your Firebase ID token here.
-        Example: `Bearer eyJhbGciOiJ...`
-
-  schemas:
-    Employee:
-      type: object
-      properties:
-        authentication_id: { type: string }
-        employee_id: { type: string }
-        email: { type: string }
-        name: { type: string }
-        position: { type: string }
-        role: { type: string, enum: ["employee", "admin"] }
-        bank_account: { type: string, nullable: true }
-        notes: { type: string, nullable: true }
-
-    Expense:
-      type: object
-      properties:
-        expense_id: { type: string, nullable: true }
-        employee_id: { type: string }
-        amount: { type: number }
-        category: { type: string }
-        description: { type: string }
-        receipt_url: { type: string, nullable: true }
-        status: { type: string, enum: ["pending", "approved", "rejected"] }
-        decision_type: { type: string, enum: ["AI", "Human"] }
-        reviewed_by: { type: string, nullable: true }
-        decision_reason: { type: string, nullable: true }
-        submitted_at: { type: string, format: date-time }
-        updated_at: { type: string, format: date-time }
-
-    ReimbursementPolicy:
-      type: object
-      properties:
-        policy_id: { type: string, nullable: true }
-        category: { type: string }
-        max_amount: { type: number }
-        eligible_roles:
-          type: array
-          items: { type: string }
-        description: { type: string, nullable: true }
-        active: { type: boolean }
-
-    AuditLog:
-      type: object
-      properties:
-        actor: { type: string }
-        action: { type: string, enum: ["create", "update", "delete"] }
-        target_type: { type: string, enum: ["expense", "employee", "policy"] }
-        target_id: { type: string, nullable: true }
-        log_notes: { type: string }
-        action_type: { type: string }
-        timestamp: { type: string, format: date-time }
-
-    QueryRequest:
-      type: object
-      required:
-        - query
-      properties:
-        query:
-          type: string
-          description: Natural language query to process
-          example: "Show me all employees"
-
-    QueryResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          description: Whether the query was processed successfully
-        response:
-          type: string
-          nullable: true
-          description: The response to the query
-        tools_used:
-          type: array
-          items:
+  /documents/url:
+    get:
+      tags:
+        - Documents
+      summary: Get public/signed URL for a document
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
             type: string
-          description: List of tools/functions used to process the query
-        query:
-          type: string
-          description: The original query that was processed
-        error:
-          type: string
-          nullable: true
-          description: Error message if the query failed
+            example: "documents/file.pdf"
+      responses:
+        '200':
+          description: URL generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  path:
+                    type: string
+                  url:
+                    type: string
+
+  /documents/download:
+    get:
+      tags:
+        - Documents
+      summary: Download a document (binary)
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "documents/file.pdf"
+      responses:
+        '200':
+          description: Document downloaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  path:
+                    type: string
+                  size:
+                    type: integer
+
+  /documents/delete:
+    delete:
+      tags:
+        - Documents
+      summary: Delete a document
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "documents/example.pdf"
+      responses:
+        '200':
+          description: Document deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  path:
+                    type: string
 

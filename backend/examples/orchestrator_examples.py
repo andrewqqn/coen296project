@@ -30,10 +30,13 @@ def validated_create_expense(ctx: RunContext[None], data: Dict[str, Any]) -> Dic
     Create a new expense with validation.
     
     Args:
-        data: Expense data - MUST include amount, category, and description
+        data: Expense data - MUST include amount, category, and business_justification
     """
+    from domain.schemas.expense_schema import ExpenseCreate
+    from datetime import datetime
+    
     # Add custom validation
-    required_fields = ['amount', 'category', 'description']
+    required_fields = ['amount', 'category', 'business_justification', 'employee_id']
     missing = [f for f in required_fields if f not in data]
     
     if missing:
@@ -49,9 +52,19 @@ def validated_create_expense(ctx: RunContext[None], data: Dict[str, Any]) -> Dic
             "success": False
         }
     
+    # Create ExpenseCreate object
+    expense_create = ExpenseCreate(
+        employee_id=data['employee_id'],
+        amount=data['amount'],
+        category=data['category'],
+        business_justification=data['business_justification'],
+        date_of_expense=data.get('date_of_expense', datetime.utcnow())
+    )
+    
     # Call the actual service
-    from domain.services import expense_service
-    return expense_service.create_expense(data)
+    from services import expense_service
+    result = expense_service.create_expense(expense_create, receipt_path=data.get('receipt_path'))
+    return result.dict() if hasattr(result, 'dict') else result
 
 
 # Example 4: Tool with context awareness
@@ -63,7 +76,7 @@ def get_user_expenses(ctx: RunContext[str], user_id: str = None) -> list[Dict[st
     Args:
         user_id: Optional user ID to filter by. If not provided, uses current user.
     """
-    from domain.services import expense_service
+    from services import expense_service
     
     # Get all expenses
     all_expenses = expense_service.list_expenses()
@@ -86,24 +99,34 @@ def create_expense_and_log(ctx: RunContext[None], expense_data: Dict[str, Any]) 
     Create an expense and automatically create an audit log entry.
     
     Args:
-        expense_data: Expense data to create
+        expense_data: Expense data to create (must include employee_id, amount, category, business_justification)
     """
-    from domain.services import expense_service, audit_service
+    from services import expense_service, audit_log_service
+    from domain.schemas.expense_schema import ExpenseCreate
     from datetime import datetime
     
+    # Create ExpenseCreate object
+    expense_create = ExpenseCreate(
+        employee_id=expense_data['employee_id'],
+        amount=expense_data['amount'],
+        category=expense_data['category'],
+        business_justification=expense_data.get('business_justification', 'N/A'),
+        date_of_expense=expense_data.get('date_of_expense', datetime.utcnow())
+    )
+    
     # Create the expense
-    result = expense_service.create_expense(expense_data)
+    result = expense_service.create_expense(expense_create, receipt_path=expense_data.get('receipt_path'))
     
     if result:
         # Create audit log
-        audit_service.create_log({
+        audit_log_service.create_log({
             "action": "CREATE_EXPENSE",
-            "resource_id": result.get('id'),
+            "resource_id": result.expense_id if hasattr(result, 'expense_id') else result.get('expense_id'),
             "timestamp": datetime.utcnow().isoformat(),
-            "details": f"Created expense: {expense_data.get('description', 'N/A')}"
+            "details": f"Created expense: {expense_data.get('business_justification', 'N/A')}"
         })
     
-    return result
+    return result.dict() if hasattr(result, 'dict') else result
 
 
 # Example 6: Tool with error handling and retry logic
@@ -115,7 +138,7 @@ def safe_get_expense(ctx: RunContext[None], expense_id: str) -> Dict[str, Any]:
     Args:
         expense_id: The expense ID to retrieve
     """
-    from domain.services import expense_service
+    from services import expense_service
     
     try:
         result = expense_service.get_expense(expense_id)
@@ -144,7 +167,7 @@ def get_expense_summary(ctx: RunContext[None]) -> Dict[str, Any]:
     """
     Get a summary of all expenses including totals and counts by category.
     """
-    from domain.services import expense_service
+    from services import expense_service
     from collections import defaultdict
     
     expenses = expense_service.list_expenses()

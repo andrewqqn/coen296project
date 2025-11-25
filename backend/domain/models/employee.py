@@ -10,7 +10,6 @@ class Employee:
     name: str
 
     position: str
-
     role: Literal["employee", "admin"] = "employee"
 
     bank_account: Optional[str] = None

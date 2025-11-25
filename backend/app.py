@@ -1,64 +1,138 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+import os
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.openapi.models import APIKey, APIKeyIn
 from fastapi.openapi.utils import get_openapi
-from application import employee_router, expense_router, policy_router, audit_router, agent_router, orchestrator_router
+
+from dotenv import load_dotenv
+load_dotenv()
+
+from infrastructure.firebase_client import init_firebase
+init_firebase()
+
+from firebase_admin import auth
+
+from controller import employee_router, expense_router, audit_router, document_router
+from application import orchestrator_router
 
 security = HTTPBearer(auto_error=False)
+USE_AUTH_EMULATOR = os.getenv("USE_FIRESTORE_EMULATOR")
+
+import logging
+from logging.handlers import RotatingFileHandler
+
+LOG_DIR = "logs"
+os.makedirs(LOG_DIR, exist_ok=True)
+
+LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format=LOG_FORMAT,
+    handlers=[
+        logging.StreamHandler(),
+        RotatingFileHandler(
+            f"{LOG_DIR}/app.log",
+            maxBytes=5_000_000,
+            backupCount=3,
+            encoding="utf-8",
+        )
+    ]
+)
+
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """
+    Authentication logic:
+    - Emulator: accept any token, do NOT verify signature
+    - Production: must verify using firebase_admin.auth.verify_id_token()
+    """
     if credentials is None:
-        raise HTTPException(status_code=401, detail="Missing Authorization header")
-    return credentials.credentials  # 或替换为 Firebase 验证
+        raise HTTPException(401, "Missing Authorization header")
+
+    token = credentials.credentials
+
+    # ---------- Emulator Mode ----------
+    if USE_AUTH_EMULATOR:
+        return {
+            "uid": f"emu-{token[-8:]}",
+            "email": "testuser@emu.local",
+            "token_raw": token
+        }
+
+    # ---------- Production Mode ----------
+    try:
+        decoded = auth.verify_id_token(token)
+        return decoded
+    except Exception:
+        raise HTTPException(401, "Invalid or expired Firebase ID Token")
+
 
 app = FastAPI(
     title="Expense Reimbursement System (CRUD + Agents)",
-    description="All requests require a Firebase ID Token after Google Sign-In.",
+    description="All endpoints require a Firebase ID Token.",
     version="1.0.0",
 )
 
-# ✅ Configure CORS
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],  # Frontend origins
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],  # Frontend URLs
     allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all headers
 )
 
-# ✅ 挂载 routers（不需要额外 Depends）
+# Register routers
 app.include_router(employee_router.router)
 app.include_router(expense_router.router)
-app.include_router(policy_router.router)
 app.include_router(audit_router.router)
-app.include_router(agent_router.router)
+app.include_router(document_router.router)
 app.include_router(orchestrator_router.router)
+
 
 @app.get("/")
 def root():
     return {"message": "Expense System (CRUD + Agents) running 🚀"}
 
-# ✅ 自定义 OpenAPI schema — 添加全局 Bearer 安全定义
+
+# ---------- CUSTOM OPENAPI ----------
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
-    openapi_schema = get_openapi(
+
+    schema = get_openapi(
         title=app.title,
         version=app.version,
         description=app.description,
         routes=app.routes,
     )
-    openapi_schema["components"]["securitySchemes"] = {
+
+    schema["components"]["securitySchemes"] = {
         "firebaseAuth": {
             "type": "http",
             "scheme": "bearer",
             "bearerFormat": "JWT",
-            "description": "Paste your Firebase ID Token here (from emulator or prod).",
+            "description": "Paste Firebase ID Token here (Emulator or Production).",
         }
     }
-    openapi_schema["security"] = [{"firebaseAuth": []}]
-    app.openapi_schema = openapi_schema
-    return app.openapi_schema
+
+    schema["security"] = [{"firebaseAuth": []}]
+    app.openapi_schema = schema
+    return schema
+
 
 app.openapi = custom_openapi
+
+from infrastructure.chroma_client import init_chroma_policy_client
+
+chroma_client = init_chroma_policy_client()
+
+collection = chroma_client.get_or_create_collection()
+if collection.count() == 0:
+    print("No Chroma data found → loading policy PDF now...")
+    chroma_client.store_policy_pdf()
+else:
+    print(f"Chroma loaded with {collection.count()} chunks")
+
+
