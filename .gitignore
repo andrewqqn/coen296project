@@ -52,6 +52,7 @@ wheels/
 !/.env.example
 gmail_oauth_credentials.json
 gmail_token.json
+oauth_request.py
 
 # Uploaded files (receipts, documents)
 backend/uploads/
