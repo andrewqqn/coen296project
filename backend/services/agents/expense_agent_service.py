@@ -9,7 +9,7 @@ from pdf2image import convert_from_bytes
 from dateutil import parser
 from pydantic import BaseModel, Field
 from langchain_core.output_parsers import JsonOutputParser
-from openai import OpenAI
+from openai import AsyncOpenAI
 from google.cloud.firestore_v1._helpers import DatetimeWithNanoseconds
 
 import domain.repositories.expense_repo as expense_repo
@@ -31,7 +31,7 @@ from services.agents.a2a_protocol import (
 logger = logging.getLogger("expense_agent")
 logger.setLevel(logging.INFO)
 
-client = OpenAI()
+client = AsyncOpenAI()
 
 
 # ============================================================
@@ -169,7 +169,7 @@ def apply_static_rules(expense, receipt_summary):
 # AI Review Logic
 # ============================================================
 
-def evaluate_and_maybe_auto_approve(expense_id: str):
+async def evaluate_and_maybe_auto_approve(expense_id: str):
     logger.info(f"[AI] Reviewing expense_id={expense_id}")
 
     # -------- Load expense ----------
@@ -305,7 +305,7 @@ def evaluate_and_maybe_auto_approve(expense_id: str):
     ]
 
     try:
-        planner_response = client.responses.create(
+        planner_response = await client.responses.create(
             model="gpt-4o-mini",
             input=planner_inputs
         )
@@ -595,7 +595,7 @@ EXAMPLE VALID OUTPUT for APPROVE (DO NOT COPY LITERALLY):
 
     # -------- Call the LLM --------
     try:
-        final_response = client.responses.create(
+        final_response = await client.responses.create(
             model="gpt-4o-mini",
             input=llm_inputs
         )
@@ -645,13 +645,26 @@ EXAMPLE VALID OUTPUT for APPROVE (DO NOT COPY LITERALLY):
 # Hook
 # ============================================================
 def auto_review_on_create(expense_id: str):
+    """
+    Synchronous wrapper that schedules async review in background.
+    This is called from synchronous code paths.
+    """
+    import asyncio
     try:
-        evaluate_and_maybe_auto_approve(expense_id)
+        # Try to get the current event loop
+        try:
+            loop = asyncio.get_running_loop()
+            # If we're already in an async context, create a task
+            loop.create_task(evaluate_and_maybe_auto_approve(expense_id))
+        except RuntimeError:
+            # No event loop running, create a new one
+            asyncio.run(evaluate_and_maybe_auto_approve(expense_id))
     except Exception as e:
-        logger.error(f"[AUTO_REVIEW_ERROR] {e}")
+        logger.error(f"[AUTO_REVIEW_ERROR] {e}", exc_info=True)
 
 if __name__ == "__main__":
-    evaluate_and_maybe_auto_approve("8fN76XaPhspd7KeaTum2")
+    import asyncio
+    asyncio.run(evaluate_and_maybe_auto_approve("8fN76XaPhspd7KeaTum2"))
 
 # ============================================================
 # A2A Agent Implementation
@@ -767,7 +780,7 @@ class ExpenseAgent(BaseAgent):
                     )
                 
                 # Run the expense review
-                result = evaluate_and_maybe_auto_approve(expense_id)
+                result = await evaluate_and_maybe_auto_approve(expense_id)
                 
                 return A2AResponse(
                     success=True,

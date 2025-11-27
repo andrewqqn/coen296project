@@ -8,7 +8,7 @@ import logging
 from io import BytesIO
 from typing import Dict, Any, Optional
 from pdf2image import convert_from_bytes
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from services.agents.base_agent import BaseAgent
 from services.agents.a2a_protocol import (
@@ -21,7 +21,7 @@ from services.agents.a2a_protocol import (
 logger = logging.getLogger("document_agent")
 logger.setLevel(logging.INFO)
 
-client = OpenAI()
+client = AsyncOpenAI()
 
 
 class DocumentAgent(BaseAgent):
@@ -202,7 +202,7 @@ For each field:
 
 Return ONLY a valid JSON object with these keys. Do not include markdown or code blocks."""
             
-            response = client.responses.create(
+            response = await client.responses.create(
                 model="gpt-4o-mini",
                 input=[
                     {"role": "system", "content": [{"type": "input_text", "text": "You are a receipt analysis assistant. Extract structured data and return only valid JSON."}]},
