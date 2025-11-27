@@ -12,6 +12,6 @@ class Employee:
     position: str
     role: Literal["employee", "admin"] = "employee"
 
-    bank_account: Optional[str] = None
+    bank_account_id: Optional[str] = None
 
     notes: Optional[str] = None

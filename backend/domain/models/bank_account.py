@@ -4,6 +4,7 @@ from typing import Optional, Literal
 
 @dataclass
 class BankAccount:
+    bank_account_id: str
     holder_name: str = None
     email: str = None
     employee_id: str = None
