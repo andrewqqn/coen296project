@@ -1,20 +1,36 @@
 "use client";
 
+/**
+ * Multi-Agent Query Component
+ * 
+ * This component uses the new multi-agent system endpoints:
+ * - POST /agents/query - For text queries
+ * - POST /agents/query-with-files - For queries with file uploads
+ * 
+ * The backend coordinates between specialized agents:
+ * - Expense Agent: Reviews expenses and applies policy rules
+ * - Document Agent: Processes PDFs and extracts information
+ * - Orchestrator Agent: Coordinates between agents
+ */
+
 import React, { useState, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, Send, Trash2, Paperclip, X } from "lucide-react";
 import { getAuthToken } from "@/lib/firebase";
+import { JSX } from "react/jsx-runtime";
+import { JSX } from "react/jsx-runtime";
+import { JSX } from "react/jsx-runtime";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
 }
 
-interface OrchestratorResponse {
+interface AgentQueryResponse {
   success: boolean;
   response: string | null;
-  tools_used: string[];
+  agents_used: string[];
   query: string;
   error: string | null;
 }
@@ -25,6 +41,7 @@ export function OrchestratorQuery() {
   const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [lastAgentsUsed, setLastAgentsUsed] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Function to format markdown text
@@ -264,7 +281,8 @@ export function OrchestratorQuery() {
           formData.append("files", file);
         });
 
-        response = await fetch(`${backendUrl}/orchestrator/`, {
+        // Use new multi-agent endpoint for file uploads
+        response = await fetch(`${backendUrl}/agents/query-with-files`, {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${token}`,
@@ -273,7 +291,8 @@ export function OrchestratorQuery() {
           body: formData,
         });
       } else {
-        response = await fetch(`${backendUrl}/orchestrator/`, {
+        // Use new multi-agent endpoint for regular queries
+        response = await fetch(`${backendUrl}/agents/query`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -291,7 +310,7 @@ export function OrchestratorQuery() {
         throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
       }
 
-      const data: OrchestratorResponse = await response.json();
+      const data: AgentQueryResponse = await response.json();
       
       // Add user message and assistant response to conversation history
       if (data.success && data.response) {
@@ -300,6 +319,11 @@ export function OrchestratorQuery() {
           { role: "user", content: currentQuery },
           { role: "assistant", content: data.response as string }
         ]);
+        
+        // Store which agents were used for display
+        if (data.agents_used && data.agents_used.length > 0) {
+          setLastAgentsUsed(data.agents_used);
+        }
       }
       
       // Clear the input and files on success
@@ -322,6 +346,17 @@ export function OrchestratorQuery() {
     setConversationHistory([]);
     setAttachedFiles([]);
     setError(null);
+    setLastAgentsUsed([]);
+  };
+
+  // Helper to format agent names for display
+  const formatAgentName = (agentId: string): string => {
+    const agentNames: Record<string, string> = {
+      'expense_agent': 'Expense Agent',
+      'document_agent': 'Document Agent',
+      'orchestrator': 'Orchestrator'
+    };
+    return agentNames[agentId] || agentId;
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -332,6 +367,25 @@ export function OrchestratorQuery() {
 
   return (
     <div className="w-full max-w-3xl mx-auto space-y-4">
+      {/* Agents Used Indicator */}
+      {lastAgentsUsed.length > 0 && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
+          <span className="text-xs font-semibold text-muted-foreground">
+            Agents Used:
+          </span>
+          <div className="flex gap-2">
+            {lastAgentsUsed.map((agentId, index) => (
+              <span
+                key={index}
+                className="px-2 py-1 text-xs font-medium bg-primary/10 text-primary rounded-md border border-primary/30"
+              >
+                {formatAgentName(agentId)}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Conversation History */}
       {conversationHistory.length > 0 && (
         <div className="space-y-3">
