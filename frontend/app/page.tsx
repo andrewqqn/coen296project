@@ -4,13 +4,14 @@ import { useState } from "react";
 import { OrchestratorQuery } from "@/components/orchestrator-query";
 import { ExpenseForm } from "@/components/expense-form";
 import { ExpenseList } from "@/components/expense-list";
+import { AccountDetails } from "@/components/account-details";
 import { Login, signOut } from "@/components/login";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
-import { Loader2, LogOut, MessageSquare, Receipt, Upload, Menu, X } from "lucide-react";
+import { Loader2, LogOut, MessageSquare, Receipt, Upload, Menu, X, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type View = "query" | "expenses" | "submit";
+type View = "query" | "expenses" | "submit" | "account";
 
 export default function Home() {
   const { user, loading } = useAuth();
@@ -37,6 +38,7 @@ export default function Home() {
     { id: "query" as View, label: "Query", icon: MessageSquare },
     { id: "expenses" as View, label: "Expenses", icon: Receipt },
     { id: "submit" as View, label: "Submit Expense", icon: Upload },
+    { id: "account" as View, label: "Account", icon: UserCircle },
   ];
 
   return (
@@ -191,6 +193,18 @@ export default function Home() {
                 <div className="flex justify-center">
                   <ExpenseForm />
                 </div>
+              </div>
+            )}
+
+            {activeView === "account" && (
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <h1 className="text-3xl font-bold tracking-tight">Account</h1>
+                  <p className="text-muted-foreground">
+                    View your employee account details
+                  </p>
+                </div>
+                <AccountDetails />
               </div>
             )}
           </div>

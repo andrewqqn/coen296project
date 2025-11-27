@@ -12,7 +12,7 @@ init_firebase()
 
 from firebase_admin import auth
 
-from controller import employee_router, expense_router, audit_router, document_router, agents_router
+from controller import employee_router, expense_router, audit_router, document_router, agents_router, bank_account_router
 from application import orchestrator_router
 
 security = HTTPBearer(auto_error=False)
@@ -88,6 +88,7 @@ app.include_router(employee_router.router)
 app.include_router(expense_router.router)
 app.include_router(audit_router.router)
 app.include_router(document_router.router)
+app.include_router(bank_account_router.router)
 app.include_router(orchestrator_router.router)
 app.include_router(agents_router.router)
 

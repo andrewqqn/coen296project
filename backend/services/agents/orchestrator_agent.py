@@ -395,11 +395,16 @@ Always explain what you're doing and provide complete results."""
                         "holder_name": name,
                         "email": email,
                         "employee_id": employee_id,
-                        "balance": 1000.0
+                        "balance": 0.0
                     }
                     financial_service.create_bank_account(bank_account_id, bank_account_data)
                     logger.info(f"Created bank account {bank_account_id} for employee {employee_id}")
-                
+                    
+                    # Update employee with bank_account_id
+                    employee_service.update_employee(employee_id, {"bank_account_id": bank_account_id})
+                    result["bank_account_id"] = bank_account_id
+                    logger.info(f"Linked bank account {bank_account_id} to employee {employee_id}")
+
                 return result
             except Exception as e:
                 logger.error(f"Error creating employee: {str(e)}", exc_info=True)
