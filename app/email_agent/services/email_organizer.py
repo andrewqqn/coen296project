@@ -21,3 +21,13 @@ class EmailOrganizer:
 
         if sender.endswith("@company.com"):
             self.mark_as_important(parsed_msg["id"])
+
+    def apply_filters(self, message_id, filter_config):
+        """Apply filtering rules to organize email"""
+        if "label" in filter_config:
+            label_name = filter_config["label"]
+            # Assuming you have a method to get/create label ID
+            return self.client.modify_labels(
+                message_id, 
+                add_labels=[label_name]
+            )
