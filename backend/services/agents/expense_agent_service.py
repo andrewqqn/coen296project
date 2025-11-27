@@ -16,7 +16,7 @@ import domain.repositories.expense_repo as expense_repo
 from services.document_service import download_receipt
 from services.vector_db_service import query_vector_db
 from services.audit_log_service import create_log
-
+from services.employee_service import get_employee
 # ============================================================
 # Logger
 # ============================================================
@@ -157,10 +157,10 @@ def apply_static_rules(expense, receipt_summary):
     # R1 – safe approve
     return "R1", "APPROVE"
 
-
 # ============================================================
 # AI Review Logic
 # ============================================================
+
 def evaluate_and_maybe_auto_approve(expense_id: str):
     logger.info(f"[AI] Reviewing expense_id={expense_id}")
 
@@ -191,33 +191,188 @@ def evaluate_and_maybe_auto_approve(expense_id: str):
     # -------- Static Rules ----------
     rule, static_decision = apply_static_rules(expense, receipt_summary)
 
-    # -------- Query Vector DB --------
-    q = f"{expense['business_justification']} | {expense['category']} | {expense['amount']}"
-    snippets = to_json_safe(query_vector_db(q, top_k=3))
+    # ============================================================
+    #  PHASE 1: Agent Planner — Decide tool usage
+    # ============================================================
 
-    # -------- Prompt Payload --------
-    expense_date = expense.get('date_of_expense')
-    expense['date_of_expense'] = normalize_date_only(expense_date)
+    planner_prompt = """
+    You are the TOOL SELECTION PLANNER for the ExpenseSense Review System.
 
-    payload = to_json_safe({
+    Your ONLY task is to decide which optional data sources must be retrieved
+    BEFORE the final expense decision agent is invoked.
+
+    You MUST comply with ALL requirements below.
+
+    ===============================================================================
+    OUTPUT FORMAT (MANDATORY — STRICT JSON ONLY)
+    ===============================================================================
+    You MUST respond with ONLY valid JSON:
+    - No prose
+    - No markdown
+    - No explanations
+    - No commentary
+    - No backticks
+    - No code fences
+    - No surrounding text
+    - No trailing commas
+    - No extra whitespace before/after
+
+    Your output MUST match this schema EXACTLY:
+
+    {
+      "vector_db": true or false,
+      "employee_profile": true or false,
+      "expense_history": true or false,
+      "reason": "<ONE short sentence explaining why>"
+    }
+
+    Field rules:
+    - "vector_db": true if policy lookup may be helpful (ambiguous category, limit checks).
+    - "employee_profile": true if employee role/department/status may affect interpretation.
+    - "expense_history": true if pattern analysis (duplicates, frequency, split receipts) may matter.
+    - If uncertain → MUST return true.
+    - "reason": concise one-sentence justification. No commas at the end.
+
+    ===============================================================================
+    PLANNER DECISION RULES (STRICT)
+    ===============================================================================
+
+    1. WHEN TO USE vector_db:
+       - Category potentially triggers limits (meals, lodging, supplies).
+       - The expense description is ambiguous.
+       - Business justification is unclear.
+       - When in doubt → TRUE.
+
+    2. WHEN TO USE employee_profile:
+       - Business purpose may depend on role, department, seniority.
+       - Travel-related expenses.
+       - Ambiguous merchant × category mapping.
+       - When in doubt → TRUE.
+
+    3. WHEN TO USE expense_history:
+       - Checking for repeated submissions today.
+       - Detecting split receipts.
+       - Past submission pattern may affect reasonableness.
+       - When in doubt → TRUE.
+
+    ===============================================================================
+    FAIL-SAFE MODE (NO GUESSING)
+    ===============================================================================
+    If ANY uncertainty occurs, you MUST output:
+    {
+      "vector_db": true,
+      "employee_profile": true,
+      "expense_history": true,
+      "reason": "Defaulted to all tools due to uncertainty"
+    }
+
+    ===============================================================================
+    OUTPUT EXAMPLES (DO NOT COPY LITERALLY)
+    ===============================================================================
+    Example 1:
+    {
+      "vector_db": true,
+      "employee_profile": false,
+      "expense_history": true,
+      "reason": "Category requires limit validation and repeated submissions may matter"
+    }
+
+    Example 2:
+    {
+      "vector_db": true,
+      "employee_profile": true,
+      "expense_history": true,
+      "reason": "Ambiguous expense details; all tools are required"
+    }
+    ===============================================================================
+    """
+
+    planner_inputs = [
+        {"role": "system", "content": [{"type": "input_text", "text": planner_prompt}]},
+        {"role": "user", "content": [
+            {"type": "input_text",
+             "text": json.dumps({"expense": expense, "receipt_summary": receipt_summary,
+                                 "static_rule": rule, "static_decision": static_decision})}
+        ]}
+    ]
+
+    try:
+        planner_response = client.responses.create(
+            model="gpt-4o-mini",
+            input=planner_inputs
+        )
+        plan_raw = planner_response.output_text
+        plan = json.loads(plan_raw)
+
+        need_vdb = bool(plan.get("vector_db", True))
+        need_profile = bool(plan.get("employee_profile", True))
+        need_history = bool(plan.get("expense_history", True))
+
+    except Exception as e:
+        logger.error(f"[Planner] Failed → default: call everything. Error: {e}")
+        need_vdb = need_profile = need_history = True
+
+    # ============================================================
+    # PHASE 2: Execute tools based on plan
+    # ============================================================
+    tools_results = {}
+
+    # Vector DB
+    if need_vdb:
+        try:
+            q = f"{expense['business_justification']} | {expense['category']} | {expense['amount']}"
+            tools_results["policy_snippets"] = to_json_safe(query_vector_db(q, top_k=3))
+        except Exception as e:
+            tools_results["policy_snippets"] = {"error": str(e)}
+
+    # Employee Profile
+    if need_profile:
+        try:
+            tools_results["employee_profile"] = to_json_safe(
+                get_employee(expense["employee_id"])
+            )
+        except Exception as e:
+            tools_results["employee_profile"] = {"error": str(e)}
+
+    # Expense History
+    if need_history:
+        try:
+            tools_results["expense_history"] = to_json_safe(
+                expense_repo.get_by_employee(expense["employee_id"])
+            )
+        except Exception as e:
+            tools_results["expense_history"] = {"error": str(e)}
+
+    # Normalize date
+    expense_date = expense.get("date_of_expense")
+    expense["date_of_expense"] = normalize_date_only(expense_date)
+
+    # ============================================================
+    # PHASE 3: Final Judgment LLM
+    # ============================================================
+    final_payload = {
         "expense": expense,
         "receipt_summary": receipt_summary,
-        "policy_snippets": snippets,
         "static_rule": rule,
-        "static_decision": static_decision
-    })
+        "static_decision": static_decision,
+        "tools_results": tools_results
+    }
 
-    system_prompt = f"""
-You are an AI Expense Reviewer for the ExpenseSense system. 
+    final_prompt = f"""
+You are the FINAL DECISION AGENT for the ExpenseSense system.
 
-Your ONLY task is to analyze the uploaded receipt image(s), compare them with the 
-submitted expense metadata and policy rules, and produce a STRICT JSON response 
-that matches the required schema exactly.
+Your ONLY task is to analyze:
+- the uploaded receipt image(s)
+- submitted expense metadata
+- static rules R1–R4
+- optional tool results (policy_snippets, employee_profile, expense_history)
 
-You MUST follow ALL instructions below.
+You MUST produce a STRICT JSON response that matches the required schema exactly.
+
+You MUST follow ALL instructions below without exception.
 
 ===============================================================================
-OUTPUT FORMAT (MANDATORY)
+OUTPUT FORMAT (MANDATORY — STRICT JSON ONLY)
 ===============================================================================
 You MUST respond with ONLY valid JSON:
 - No prose
@@ -225,9 +380,10 @@ You MUST respond with ONLY valid JSON:
 - No explanations
 - No commentary
 - No backticks
-- No extra whitespace before/after
-- No unexpected keys
+- No code fences
+- No surrounding text
 - No trailing commas
+- No extra whitespace before or after
 
 Your output MUST match this schema exactly:
 
@@ -235,13 +391,35 @@ Schema (ExpenseDecision):
 {format_instructions}
 
 Field rules:
-- "decision": one of "APPROVE", "REJECT", "MANUAL"
-- "rule": a short string identifier (e.g., "R1", "R2", "R3", "R4", "CONFLICT") or null
-- "reason": concise human-readable explanation (1–2 short sentences max)
+- "decision": must be one of "APPROVE", "REJECT", or "MANUAL"
+- "rule": a short identifier ("R1", "R2", "R3", "R4", "CONFLICT", "OCR") or null
+- "reason": must be a concise human-readable explanation (1–2 short sentences)
 - "confidence": float in [0, 1]
 
+Additionally, the following optional fields MUST be included if available:
+- merchant_name
+- date_of_expense
+- total_amount
+- subtotal
+- tax
+- payment_method
+
 ===============================================================================
-REIMBURSEMENT POLICY SUMMARY (STRICT RULES TO FOLLOW)
+INFORMATION PROVIDED TO YOU
+===============================================================================
+Below is the data you will receive (as a Python dict):
+- "expense": submitted metadata
+- "receipt_summary": status of receipt extraction
+- "static_rule" and "static_decision": results from rules R1–R4
+- "tools_results": may contain:
+      * "policy_snippets"
+      * "employee_profile"
+      * "expense_history"
+
+You MUST use all available evidence.
+
+===============================================================================
+REIMBURSEMENT POLICY RULES (STRICT)
 ===============================================================================
 
 ----------------------------------------
@@ -278,6 +456,7 @@ If these cannot be confidently extracted:
 - Meals: ≤ $120/day  
 - Supplies: ≤ $200 per item  
 - Hotels: ≤ $500/day  
+- Conference: no limit
 - Weekly total should not exceed $2,500 without manager review
 
 If amounts exceed limits → MANUAL or REJECT
@@ -390,46 +569,35 @@ EXAMPLE VALID OUTPUT for APPROVE (DO NOT COPY LITERALLY):
 ===============================================================================
     """
 
-    # -------- AI Call --------
+    # Prepare image
+    image_b64 = None
+    if isinstance(base64_img_list, list) and base64_img_list:
+        image_b64 = base64_img_list[0]
+        save_base64_to_jpeg(image_b64, "page1.jpg")
+    elif isinstance(base64_img_list, str):
+        image_b64 = base64_img_list
+
+    llm_inputs = [
+        {"role": "system", "content": [{"type": "input_text", "text": final_prompt}]},
+        {"role": "user", "content": [
+            {"type": "input_image", "image_url": f"data:image/jpeg;base64,{image_b64}"},
+            {"type": "input_text", "text": json.dumps(final_payload, indent=2)}
+        ]}
+    ]
+
+    # -------- Call the LLM --------
     try:
-        # If pdf_to_base64 returned a list of page images, use the first page only
-        image_b64 = None
-        if isinstance(base64_img_list, list) and len(base64_img_list) > 0:
-            image_b64 = base64_img_list[0]
-            save_base64_to_jpeg(image_b64, "page1.jpg")
-        elif isinstance(base64_img_list, str):
-            image_b64 = base64_img_list
-
-        # Build the user message with the payload as compact JSON
-        expense_prompt = f"""
-        The receipt image(s) for this expense are provided separately above as input_image content.
-
-        Below are the structured details of the expense, extracted metadata,
-        policy retrieval context, and pre-evaluated static rules:
-
-        Expense details (JSON-safe structure):
-        {json.dumps(payload, indent=2)}
-        """
-
-        inputs = [
-            {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
-            {"role": "user", "content": [
-                {"type": "input_image", "image_url": f"data:image/jpeg;base64,{image_b64}"},
-                {"type": "input_text", "text": expense_prompt},
-            ]}
-        ]
-        response = client.responses.create(
+        final_response = client.responses.create(
             model="gpt-4o-mini",
-            input=inputs
+            input=llm_inputs
         )
 
-        print(response.output_text)
-        raw_str = response.output_text
+        raw_str = final_response.output_text
         raw_dict = json.loads(raw_str)
         parsed = ExpenseDecision(**raw_dict)
 
     except Exception as e:
-        logger.error(f"[AI] JSON parse failed → fallback to MANUAL. Error: {e}")
+        logger.error(f"[Final Agent] JSON parse fail → fallback MANUAL. Error: {e}")
 
         parsed = ExpenseDecision(
             decision="MANUAL",
@@ -438,7 +606,9 @@ EXAMPLE VALID OUTPUT for APPROVE (DO NOT COPY LITERALLY):
             confidence=0
         )
 
-    # -------- Map Decision → DB Status --------
+    # ============================================================
+    # Map to DB
+    # ============================================================
     status_map = {
         "APPROVE": "approved",
         "REJECT": "rejected",
@@ -452,15 +622,15 @@ EXAMPLE VALID OUTPUT for APPROVE (DO NOT COPY LITERALLY):
         "decision_reason": f"{parsed.rule}: {parsed.reason}",
     })
 
-    # -------- Audit Log --------
+    # Audit Log
     create_log({
         "actor": "AI",
         "expense_id": expense_id,
         "log": f"{parsed.decision}, rule={parsed.rule}, reason={parsed.reason}",
     })
+    logger.info(f"[AI] Decision: {parsed.decision}, rule={parsed.rule}, reason={parsed.reason}")
 
     return parsed
-
 
 
 # ============================================================
@@ -471,3 +641,6 @@ def auto_review_on_create(expense_id: str):
         evaluate_and_maybe_auto_approve(expense_id)
     except Exception as e:
         logger.error(f"[AUTO_REVIEW_ERROR] {e}")
+
+if __name__ == "__main__":
+    evaluate_and_maybe_auto_approve("8fN76XaPhspd7KeaTum2")
