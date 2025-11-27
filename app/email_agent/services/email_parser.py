@@ -1,32 +1,24 @@
 import base64
-from email import message_from_bytes
-
+import email
 
 class EmailParser:
-    
-    @staticmethod
-    def extract_body(msg) -> str:
-        parts = msg.get("payload", {}).get("parts", [])
-
-        for part in parts:
-            if part["mimeType"] == "text/plain":
-                data = part["body"]["data"]
-                decoded = base64.urlsafe_b64decode(data).decode("utf-8")
-                return decoded
+    def parse_raw_email(self, gmail_message):
+        """Parse raw MIME email from Gmail API format"""
+        raw_data = gmail_message.get("raw", "")
+        decoded = base64.urlsafe_b64decode(raw_data)
+        msg = email.message_from_bytes(decoded)
         
-        return ""
-    
-    @staticmethod
-    def parse_message(msg) -> dict:
-        body = EmailParser.extract_body(msg)
-        headers = msg.get("payload", {}).get("headers", [])
-
-        header_dict = {h["name"]: h["value"] for h in headers}
-
         return {
-            "id": msg["id"],
-            "subject": header_dict.get("Subject"),
-            "from": header_dict.get("From"),
-            "date": header_dict.get("Date"),
-            "body": body,
+            "subject": msg.get("Subject", ""),
+            "from": msg.get("From", ""),
+            "to": msg.get("To", ""),
+            "body": self._extract_body(msg)
         }
+    
+    def _extract_body(self, msg):
+        if msg.is_multipart():
+            for part in msg.walk():
+                if part.get_content_type() == "text/plain":
+                    return part.get_payload(decode=True).decode()
+        else:
+            return msg.get_payload(decode=True).decode()

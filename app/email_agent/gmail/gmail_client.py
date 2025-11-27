@@ -55,18 +55,16 @@ class GmailClient:
             logger.error(f"Gmail get_message error: {e}")
             return None
 
-    def modify_labels(self, message_id, add_labels=None, remove_labels=None, user_id="me"):
+    def modify_labels(self, message_id, add_labels=None, remove_labels=None, user_id='me'):
         try:
             payload = {
-                "addLabelIds": add_labels or [],
-                "removeLabelIds": remove_labels or []
+                'addLabelIds': add_labels or [],
+                'removeLabelIds': remove_labels or []
             }
-            return (
-                self.service.users()
-                .messages()
-                .modify(userId=user_id, id=message_id, body=payload)
-                .execute()
-            )
-        except HttpError as e:
-            logger.error(f"Gmail modify_labels error: {e}")
-            return None
+            return (self.service.users().messages()
+                    .modify(userId=user_id, id=message_id, body=payload)
+                    .execute())
+        except Exception as e:
+            logging.error(f"Failed to modify labels for {message_id}: {e}")
+            return None  # or return {"error": str(e)}
+
