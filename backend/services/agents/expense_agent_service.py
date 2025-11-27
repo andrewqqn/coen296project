@@ -3,11 +3,11 @@ import base64
 import logging
 from io import BytesIO
 from datetime import datetime, timezone
-from typing import Optional, Literal, List, Any, cast
+from typing import Optional, Literal, List, Any, Dict, cast
 
 from pdf2image import convert_from_bytes
 from dateutil import parser
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from langchain_core.output_parsers import JsonOutputParser
 from openai import OpenAI
 from google.cloud.firestore_v1._helpers import DatetimeWithNanoseconds
@@ -16,6 +16,13 @@ import domain.repositories.expense_repo as expense_repo
 from services.document_service import download_receipt
 from services.vector_db_service import query_vector_db
 from services.audit_log_service import create_log
+from services.agents.base_agent import BaseAgent
+from services.agents.a2a_protocol import (
+    AgentCard,
+    AgentCapability,
+    A2ARequest,
+    A2AResponse
+)
 
 # ============================================================
 # Logger
@@ -471,3 +478,161 @@ def auto_review_on_create(expense_id: str):
         evaluate_and_maybe_auto_approve(expense_id)
     except Exception as e:
         logger.error(f"[AUTO_REVIEW_ERROR] {e}")
+
+
+# ============================================================
+# A2A Agent Implementation
+# ============================================================
+class ExpenseAgent(BaseAgent):
+    """
+    Expense Agent - Handles expense review and approval using AI
+    """
+    
+    def __init__(self):
+        super().__init__(
+            agent_id="expense_agent",
+            name="Expense Review Agent",
+            description="AI-powered expense review and approval agent that validates receipts and applies policy rules"
+        )
+    
+    def get_agent_card(self) -> AgentCard:
+        """Return the agent's capability card"""
+        return AgentCard(
+            agent_id=self.agent_id,
+            name=self.name,
+            description=self.description,
+            version="1.0.0",
+            capabilities=[
+                AgentCapability(
+                    name="review_expense",
+                    description="Review an expense submission with AI-powered receipt analysis and policy validation",
+                    input_schema={
+                        "type": "object",
+                        "properties": {
+                            "expense_id": {
+                                "type": "string",
+                                "description": "The ID of the expense to review"
+                            }
+                        },
+                        "required": ["expense_id"]
+                    },
+                    output_schema={
+                        "type": "object",
+                        "properties": {
+                            "decision": {
+                                "type": "string",
+                                "enum": ["APPROVE", "REJECT", "MANUAL"],
+                                "description": "The review decision"
+                            },
+                            "rule": {
+                                "type": "string",
+                                "description": "The rule that was applied"
+                            },
+                            "reason": {
+                                "type": "string",
+                                "description": "Explanation for the decision"
+                            },
+                            "confidence": {
+                                "type": "number",
+                                "description": "Confidence score (0-1)"
+                            },
+                            "merchant_name": {"type": "string"},
+                            "date_of_expense": {"type": "string"},
+                            "total_amount": {"type": "string"},
+                            "subtotal": {"type": "string"},
+                            "tax": {"type": "string"},
+                            "payment_method": {"type": "string"}
+                        }
+                    }
+                ),
+                AgentCapability(
+                    name="apply_static_rules",
+                    description="Apply static policy rules to an expense (R1-R4)",
+                    input_schema={
+                        "type": "object",
+                        "properties": {
+                            "expense": {
+                                "type": "object",
+                                "description": "The expense data"
+                            },
+                            "receipt_summary": {
+                                "type": "string",
+                                "description": "Summary of receipt status"
+                            }
+                        },
+                        "required": ["expense", "receipt_summary"]
+                    },
+                    output_schema={
+                        "type": "object",
+                        "properties": {
+                            "rule": {"type": "string"},
+                            "decision": {"type": "string"}
+                        }
+                    }
+                )
+            ],
+            metadata={
+                "model": "gpt-4o-mini",
+                "supports_vision": True,
+                "max_amount": 500,
+                "policy_rules": ["R1", "R2", "R3", "R4"]
+            }
+        )
+    
+    async def handle_request(self, request: A2ARequest, context: Dict[str, Any]) -> A2AResponse:
+        """Handle incoming A2A requests"""
+        try:
+            capability = request.capability_name
+            params = request.parameters
+            
+            if capability == "review_expense":
+                expense_id = params.get("expense_id")
+                if not expense_id:
+                    return A2AResponse(
+                        success=False,
+                        error="Missing required parameter: expense_id"
+                    )
+                
+                # Run the expense review
+                result = evaluate_and_maybe_auto_approve(expense_id)
+                
+                return A2AResponse(
+                    success=True,
+                    result=result.dict(),
+                    metadata={"expense_id": expense_id}
+                )
+            
+            elif capability == "apply_static_rules":
+                expense = params.get("expense")
+                receipt_summary = params.get("receipt_summary")
+                
+                if not expense or not receipt_summary:
+                    return A2AResponse(
+                        success=False,
+                        error="Missing required parameters: expense and receipt_summary"
+                    )
+                
+                rule, decision = apply_static_rules(expense, receipt_summary)
+                
+                return A2AResponse(
+                    success=True,
+                    result={"rule": rule, "decision": decision}
+                )
+            
+            else:
+                return A2AResponse(
+                    success=False,
+                    error=f"Unknown capability: {capability}"
+                )
+                
+        except Exception as e:
+            logger.error(f"Error handling request in ExpenseAgent: {str(e)}", exc_info=True)
+            return A2AResponse(
+                success=False,
+                error=str(e)
+            )
+
+
+# Create and register the expense agent
+expense_agent = ExpenseAgent()
+expense_agent.register()
