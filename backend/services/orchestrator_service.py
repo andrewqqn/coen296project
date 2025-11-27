@@ -1,5 +1,18 @@
 """
-Orchestrator service using Pydantic AI to route natural language queries to appropriate tools.
+DEPRECATED: Legacy Orchestrator Service
+
+This file is deprecated and no longer used. The system now uses the multi-agent
+architecture in services/multi_agent_orchestrator.py and services/agents/.
+
+The /orchestrator endpoint has been updated to use the new system while maintaining
+backward compatibility.
+
+For new development, use:
+- services/multi_agent_orchestrator.py
+- services/agents/orchestrator_agent.py
+- controller/agents_router.py
+
+This file is kept for reference only.
 """
 from typing import Any, Dict, List, Optional, Literal
 from pydantic import BaseModel

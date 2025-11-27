@@ -12,7 +12,7 @@ init_firebase()
 
 from firebase_admin import auth
 
-from controller import employee_router, expense_router, audit_router, document_router
+from controller import employee_router, expense_router, audit_router, document_router, agents_router
 from application import orchestrator_router
 
 security = HTTPBearer(auto_error=False)
@@ -89,6 +89,7 @@ app.include_router(expense_router.router)
 app.include_router(audit_router.router)
 app.include_router(document_router.router)
 app.include_router(orchestrator_router.router)
+app.include_router(agents_router.router)
 
 
 @app.get("/")
@@ -134,5 +135,15 @@ if collection.count() == 0:
     chroma_client.store_policy_pdf()
 else:
     print(f"Chroma loaded with {collection.count()} chunks")
+
+# Initialize multi-agent system
+print("Initializing multi-agent system...")
+from services.agents import expense_agent_service, document_agent_service, orchestrator_agent
+from services.agents.a2a_protocol import agent_registry
+
+registered_agents = agent_registry.list_agents()
+print(f"✓ Multi-agent system initialized with {len(registered_agents)} agents:")
+for agent in registered_agents:
+    print(f"  - {agent.name} ({agent.agent_id}): {len(agent.capabilities)} capabilities")
 
 
