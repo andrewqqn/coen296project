@@ -350,7 +350,7 @@ def register_audit_tools(agent: Agent):
         Use this when the user wants to see system activity or audit trail.
         """
         logger.info(f"Tool called: list_all_audit_logs by admin {ctx.deps.employee_id}")
-        return audit_service.list_logs()
+        return audit_log_service.list_logs()
 
     @agent.tool
     def create_audit_log(ctx: RunContext[UserContext], data: Dict[str, Any]) -> Dict[str, Any]:
@@ -361,7 +361,7 @@ def register_audit_tools(agent: Agent):
             data: Audit log data including action, user, timestamp, etc.
         """
         logger.info(f"Tool called: create_audit_log with data={data}")
-        return audit_service.create_log(data)
+        return audit_log_service.create_log(data)
 
 
 # Receipt processing tool (available to both roles)
