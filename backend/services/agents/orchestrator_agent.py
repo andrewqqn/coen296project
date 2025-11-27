@@ -372,7 +372,8 @@ Always explain what you're doing and provide complete results."""
             Returns:
                 Created employee details
             """
-            from services import employee_service
+            from services import employee_service, financial_service
+            import uuid
             
             logger.info(f"Admin {ctx.deps.user_id} creating employee: {name}")
             
@@ -385,6 +386,20 @@ Always explain what you're doing and provide complete results."""
                 }
                 result = employee_service.create_employee(data)
                 logger.info(f"Created employee: {result}")
+                
+                # Create associated bank account
+                employee_id = result.get("employee_id")
+                if employee_id:
+                    bank_account_id = str(uuid.uuid4())
+                    bank_account_data = {
+                        "holder_name": name,
+                        "email": email,
+                        "employee_id": employee_id,
+                        "balance": 1000.0
+                    }
+                    financial_service.create_bank_account(bank_account_id, bank_account_data)
+                    logger.info(f"Created bank account {bank_account_id} for employee {employee_id}")
+                
                 return result
             except Exception as e:
                 logger.error(f"Error creating employee: {str(e)}", exc_info=True)
