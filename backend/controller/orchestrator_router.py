@@ -1,15 +1,16 @@
 """
-Orchestrator Router - Natural language query endpoint using Pydantic AI
+Orchestrator Router - Natural language query endpoint
+LEGACY ENDPOINT - Redirects to new multi-agent system
 """
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from infrastructure.auth_middleware import verify_firebase_token
-from services.orchestrator_service import process_query
+from services.multi_agent_orchestrator import process_query_with_agents
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/orchestrator", tags=["Orchestrator"])
+router = APIRouter(prefix="/orchestrator", tags=["Orchestrator (Legacy)"])
 
 
 class QueryRequest(BaseModel):
@@ -41,7 +42,7 @@ async def orchestrate_options():
     return {}
 
 
-@router.post("", response_model=QueryResponse, summary="Process Natural Language Query")
+@router.post("", response_model=QueryResponse, summary="Process Natural Language Query (Legacy)")
 @router.post("/", response_model=QueryResponse, include_in_schema=False)
 async def orchestrate_query(
     request: QueryRequest,
@@ -49,6 +50,9 @@ async def orchestrate_query(
 ):
     """
     Process a natural language query and route it to the appropriate tools.
+    
+    **LEGACY ENDPOINT**: This endpoint now uses the new multi-agent system.
+    For new integrations, use `/agents/query` instead.
     
     The orchestrator uses GPT-4 to understand the user's intent and automatically
     calls the necessary functions to fulfill the request.
@@ -62,10 +66,18 @@ async def orchestrate_query(
     - "Update employee emp123 to change their department to Engineering"
     """
     try:
-        logger.info(f"Received query from user {user_claims.get('uid')}: {request.query}")
+        employee_id = user_claims.get("uid")
+        role = user_claims.get("role", "employee")
         
-        # Process the query using Pydantic AI
-        result = await process_query(request.query)
+        logger.info(f"[LEGACY] Received query from user {employee_id}: {request.query}")
+        logger.info(f"[LEGACY] Redirecting to multi-agent system")
+        
+        # Use the new multi-agent system
+        result = await process_query_with_agents(
+            query=request.query,
+            employee_id=employee_id,
+            role=role
+        )
         
         if not result.get("success"):
             raise HTTPException(
@@ -73,7 +85,14 @@ async def orchestrate_query(
                 detail=f"Error processing query: {result.get('error', 'Unknown error')}"
             )
         
-        return QueryResponse(**result)
+        # Map new response format to legacy format
+        return QueryResponse(
+            success=result["success"],
+            response=result.get("response"),
+            tools_used=result.get("agents_used", []),  # Map agents_used to tools_used
+            query=result["query"],
+            error=result.get("error")
+        )
         
     except HTTPException:
         raise
