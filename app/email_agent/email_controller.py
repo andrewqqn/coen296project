@@ -1,5 +1,5 @@
 from backend.domain.models.expense import Expense
-from .email_service import EmailService
+from .services import EmailService
 from .templates import render_expense_decision_email
 
 class EmailController:
