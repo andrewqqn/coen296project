@@ -620,7 +620,7 @@ EXAMPLE VALID OUTPUT for APPROVE (DO NOT COPY LITERALLY):
     status_map = {
         "APPROVE": "approved",
         "REJECT": "rejected",
-        "MANUAL": "admin-review"
+        "MANUAL": "admin_review"
     }
     status = status_map[parsed.decision]
 

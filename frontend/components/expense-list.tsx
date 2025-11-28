@@ -5,7 +5,9 @@ import { useAuth } from "@/lib/auth-context";
 import { getAuthToken } from "@/lib/firebase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, AlertCircle, Receipt, Calendar, DollarSign, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Loader2, AlertCircle, Receipt, Calendar, DollarSign, FileText, CheckCircle, XCircle, User, Mail } from "lucide-react";
 
 interface Expense {
   expense_id: string;
@@ -20,6 +22,8 @@ interface Expense {
   receipt_path?: string;
   submitted_at: string;
   updated_at: string;
+  employee_name?: string;
+  employee_email?: string;
 }
 
 interface Employee {
@@ -37,6 +41,9 @@ export function ExpenseList() {
   const [error, setError] = useState<string | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [employee, setEmployee] = useState<Employee | null>(null);
+  const [reviewingExpenseId, setReviewingExpenseId] = useState<string | null>(null);
+  const [reviewReason, setReviewReason] = useState<string>("");
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -122,6 +129,50 @@ export function ExpenseList() {
     }).format(amount);
   };
 
+  const handleReview = async (expenseId: string, action: "approve" | "reject") => {
+    if (!reviewReason.trim()) {
+      setError("Please provide a reason for your decision");
+      return;
+    }
+
+    setSubmittingReview(true);
+    setError(null);
+
+    try {
+      const token = await getAuthToken();
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+
+      const formData = new FormData();
+      formData.append("action", action);
+      formData.append("reason", reviewReason);
+
+      const response = await fetch(`${backendUrl}/expenses/${expenseId}/review`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to submit review");
+      }
+
+      // Refresh the expense list
+      await fetchData();
+      
+      // Reset review state
+      setReviewingExpenseId(null);
+      setReviewReason("");
+    } catch (err) {
+      console.error("Error submitting review:", err);
+      setError(err instanceof Error ? err.message : "Failed to submit review");
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -180,6 +231,28 @@ export function ExpenseList() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
+                {/* Employee Info - Admin Only */}
+                {employee?.role === "admin" && (expense.employee_name || expense.employee_email) && (
+                  <div className="pb-3 border-b">
+                    <div className="grid grid-cols-1 gap-2 text-sm">
+                      {expense.employee_name && (
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-muted-foreground">Employee:</span>
+                          <span className="font-medium">{expense.employee_name}</span>
+                        </div>
+                      )}
+                      {expense.employee_email && (
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-muted-foreground">Email:</span>
+                          <span className="font-medium">{expense.employee_email}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -214,6 +287,73 @@ export function ExpenseList() {
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Receipt className="h-4 w-4" />
                     <span>Receipt attached</span>
+                  </div>
+                )}
+
+                {/* Admin Review Section */}
+                {employee?.role === "admin" && expense.status === "admin_review" && (
+                  <div className="pt-4 border-t space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <AlertCircle className="h-4 w-4 text-yellow-500" />
+                      <span>Admin Review Required</span>
+                    </div>
+                    
+                    {reviewingExpenseId === expense.expense_id ? (
+                      <div className="space-y-3">
+                        <Textarea
+                          placeholder="Enter reason for approval or rejection..."
+                          value={reviewReason}
+                          onChange={(e) => setReviewReason(e.target.value)}
+                          className="min-h-[80px]"
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => handleReview(expense.expense_id, "approve")}
+                            disabled={submittingReview || !reviewReason.trim()}
+                            className="flex-1"
+                            variant="default"
+                          >
+                            {submittingReview ? (
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            ) : (
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                            )}
+                            Approve
+                          </Button>
+                          <Button
+                            onClick={() => handleReview(expense.expense_id, "reject")}
+                            disabled={submittingReview || !reviewReason.trim()}
+                            className="flex-1"
+                            variant="destructive"
+                          >
+                            {submittingReview ? (
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            ) : (
+                              <XCircle className="h-4 w-4 mr-2" />
+                            )}
+                            Reject
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              setReviewingExpenseId(null);
+                              setReviewReason("");
+                            }}
+                            disabled={submittingReview}
+                            variant="outline"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={() => setReviewingExpenseId(expense.expense_id)}
+                        variant="outline"
+                        className="w-full"
+                      >
+                        Review Expense
+                      </Button>
+                    )}
                   </div>
                 )}
               </CardContent>

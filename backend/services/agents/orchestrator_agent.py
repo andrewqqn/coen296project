@@ -109,7 +109,7 @@ Step 4: Present the complete result
 - Tell the user:
   * Expense ID
   * Amount and category
-  * Status (approved/rejected/admin-review/pending)
+  * Status (approved/rejected/admin_review/pending)
   * Decision reason (why it was approved/rejected)
   * What happens next (if manual review needed)
 
@@ -130,7 +130,7 @@ Your Actions:
 If status is "rejected":
 "❌ Created expense exp_xyz for $12.45 at Starbucks. Status: REJECTED. Reason: [decision_reason]"
 
-If status is "admin-review":
+If status is "admin_review":
 "⏳ Created expense exp_xyz for $12.45 at Starbucks. Status: MANUAL REVIEW REQUIRED. Reason: [decision_reason]. An administrator will review this expense."
 
 DO NOT:
@@ -618,7 +618,7 @@ Always explain what you're doing and provide complete results."""
                             decision_actor = updated_expense.get('decision_actor')
                             status = updated_expense.get('status')
                             
-                            if decision_actor == 'AI' and status in ['approved', 'rejected', 'admin-review']:
+                            if decision_actor == 'AI' and status in ['approved', 'rejected', 'admin_review']:
                                 logger.info(f"AI review completed with status: {status}")
                                 
                                 # Note: Bank account is automatically updated by expense_agent_service
