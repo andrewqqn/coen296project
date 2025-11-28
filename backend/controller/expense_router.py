@@ -134,3 +134,38 @@ def review_expense(
     }
     
     return expense_service.update_expense(expense_id, update_data)
+
+
+@router.get("/{expense_id}/receipt-url")
+def get_receipt_url(
+    expense_id: str,
+    user_claims: dict = Depends(verify_firebase_token)
+):
+    """
+    Get a signed URL to view/download the receipt for an expense.
+    Employees can only access their own receipts, admins can access all.
+    """
+    firebase_uid = user_claims.get("uid")
+    
+    # Get employee to determine role and internal ID
+    employee = employee_service.get_employee_by_auth_id(firebase_uid)
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee profile not found")
+    
+    # Get the expense
+    expense = expense_service.get_expense(expense_id)
+    if not expense:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    
+    # Check authorization: employees can only view their own receipts
+    if employee.get("role") != "admin" and expense.get("employee_id") != employee.get("employee_id"):
+        raise HTTPException(status_code=403, detail="Not authorized to view this receipt")
+    
+    # Check if receipt exists
+    receipt_path = expense.get("receipt_path")
+    if not receipt_path:
+        raise HTTPException(status_code=404, detail="No receipt attached to this expense")
+    
+    # Generate signed URL
+    url = expense_service.get_receipt_url(receipt_path)
+    return {"url": url, "receipt_path": receipt_path}
