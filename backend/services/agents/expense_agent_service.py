@@ -645,6 +645,61 @@ EXAMPLE VALID OUTPUT for APPROVE (DO NOT COPY LITERALLY):
     logger.info(f"[AI] Decision: {parsed.decision}, rule={parsed.rule}, reason={parsed.reason}")
     
     # ============================================================
+    # Send Email Notification
+    # ============================================================
+    try:
+        from services.employee_service import get_employee
+        from services.agents.email_agent_service import email_agent
+        from services.agents.a2a_protocol import A2ARequest, create_a2a_message
+        
+        # Get employee email
+        emp_id = expense.get('employee_id')
+        employee_data = get_employee(emp_id)
+        
+        if employee_data and employee_data.get('email'):
+            employee_email = employee_data['email']
+            
+            # Create email notification request
+            email_request = A2ARequest(
+                capability_name="send_expense_notification",
+                parameters={
+                    "to": employee_email,
+                    "expense_id": expense_id,
+                    "status": status,
+                    "amount": float(expense.get('amount', 0)),
+                    "category": expense.get('category', 'N/A'),
+                    "decision_reason": f"{parsed.rule}: {parsed.reason}"
+                },
+                context={"user_id": "system", "role": "system"}
+            )
+            
+            # Send via A2A protocol
+            message = create_a2a_message(
+                sender_id="expense_agent",
+                recipient_id="email_agent",
+                message_type="request",
+                payload=email_request.dict(),
+                capability_name="send_expense_notification"
+            )
+            
+            # Send email notification (await since we're in async context)
+            response = await email_agent.process_message(
+                message, 
+                context={"user_id": "system", "role": "system"}
+            )
+            
+            if response.message_type == "response":
+                logger.info(f"[EMAIL] Notification sent successfully to {employee_email} for expense {expense_id}")
+            else:
+                logger.warning(f"[EMAIL] Notification failed: {response.payload.get('error')}")
+        else:
+            logger.warning(f"[EMAIL] Could not send notification - employee {emp_id} has no email")
+            
+    except Exception as e:
+        # Don't fail the expense review if email fails
+        logger.error(f"[EMAIL] Failed to send notification: {str(e)}", exc_info=True)
+    
+    # ============================================================
     # Update Bank Account Balance if Approved
     # ============================================================
     if status == "approved":

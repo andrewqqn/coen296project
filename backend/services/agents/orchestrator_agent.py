@@ -61,6 +61,7 @@ IMPORTANT: When users ask about policies, rules, limits, or approval processes:
 Available specialized agents:
 1. Expense Agent - Reviews expenses, applies policy rules, validates receipts
 2. Document Agent - Processes PDF receipts, extracts structured information
+3. Email Agent - Sends email notifications for expense decisions and system events
 
 Available direct tools:
 1. create_expense - Create a new expense record (automatically processes payment if approved)
@@ -82,6 +83,9 @@ Common workflows:
   2. Use create_expense with the extracted data (including receipt_path)
   3. The system will automatically trigger AI review after creation
   4. Use get_expense to check the review result
+- Send email notification → Use call_email_agent with send_expense_notification or send_email capability
+  * send_expense_notification: For expense decision notifications (requires: to, expense_id, status, amount)
+  * send_email: For generic emails (requires: to, subject, body)
 - List expenses → Use list_expenses tool
 - Query policies → Use query_policies tool (e.g., "meal limits", "travel policy", "receipt requirements")
   * For policy questions, ALWAYS use query_policies to get accurate information from the policy database
@@ -606,6 +610,136 @@ Always explain what you're doing and provide complete results."""
                 return [{"error": str(e)}]
         
         @self.pydantic_agent.tool
+        async def call_email_agent(
+            ctx: RunContext[OrchestratorContext],
+            capability: str,
+            parameters: Dict[str, Any]
+        ) -> Dict[str, Any]:
+            """
+            Call the Email Agent to send notifications or manage email communication.
+            
+            Args:
+                capability: The capability to invoke (send_expense_notification, send_email, search_emails)
+                parameters: Parameters for the capability
+            
+            Returns:
+                Dictionary with email operation results. Always returns a dict, never raises exceptions.
+                Format: {"success": True/False, "error": "...", "sent": True/False, etc}
+            """
+            try:
+                logger.info(f"[TOOL START] call_email_agent: capability={capability}, params={parameters}")
+                
+                # Import here to avoid circular dependency
+                try:
+                    from services.agents.email_agent_service import email_agent
+                    from services.audit_log_service import log_inter_agent_message
+                    logger.info("[TOOL] Email agent imported successfully")
+                except Exception as import_error:
+                    error_msg = f"Failed to import email_agent: {str(import_error)}"
+                    logger.error(error_msg, exc_info=True)
+                    return {"success": False, "error": error_msg}
+                
+                # Create request
+                try:
+                    request = A2ARequest(
+                        capability_name=capability,
+                        parameters=parameters,
+                        context={"user_id": ctx.deps.user_id, "role": ctx.deps.role}
+                    )
+                    logger.info("[TOOL] A2ARequest created successfully")
+                except Exception as req_error:
+                    error_msg = f"Failed to create A2ARequest: {str(req_error)}"
+                    logger.error(error_msg, exc_info=True)
+                    return {"success": False, "error": error_msg}
+                
+                # Create message
+                try:
+                    message = create_a2a_message(
+                        sender_id=self.agent_id,
+                        recipient_id="email_agent",
+                        message_type="request",
+                        payload=request.dict(),
+                        capability_name=capability
+                    )
+                    logger.info("[TOOL] A2A message created successfully")
+                except Exception as msg_error:
+                    error_msg = f"Failed to create A2A message: {str(msg_error)}"
+                    logger.error(error_msg, exc_info=True)
+                    return {"success": False, "error": error_msg}
+                
+                # Process message
+                try:
+                    response_message = await email_agent.process_message(
+                        message,
+                        context={"user_id": ctx.deps.user_id, "role": ctx.deps.role}
+                    )
+                    logger.info(f"[TOOL] Email agent processed message, type={response_message.message_type}")
+                except Exception as process_error:
+                    error_msg = f"Failed to process message: {str(process_error)}"
+                    logger.error(error_msg, exc_info=True)
+                    
+                    # Log failed inter-agent message
+                    log_inter_agent_message(
+                        from_agent="orchestrator",
+                        to_agent="email_agent",
+                        capability=capability,
+                        parameters=parameters,
+                        success=False,
+                        error=error_msg
+                    )
+                    
+                    return {"success": False, "error": error_msg}
+                
+                # Check response
+                if response_message.message_type == "error":
+                    error = response_message.payload.get("error", "Unknown error")
+                    logger.error(f"[TOOL] Error from email_agent: {error}")
+                    
+                    # Log failed inter-agent message
+                    log_inter_agent_message(
+                        from_agent="orchestrator",
+                        to_agent="email_agent",
+                        capability=capability,
+                        parameters=parameters,
+                        success=False,
+                        error=error
+                    )
+                    
+                    return {"success": False, "error": error}
+                
+                result = response_message.payload.get("result", {})
+                logger.info(f"[TOOL SUCCESS] Email agent returned: {result}")
+                
+                # Log successful inter-agent message
+                log_inter_agent_message(
+                    from_agent="orchestrator",
+                    to_agent="email_agent",
+                    capability=capability,
+                    parameters=parameters,
+                    success=True
+                )
+                
+                return {"success": True, **result}
+                
+            except Exception as e:
+                error_msg = f"[TOOL EXCEPTION] Unexpected exception in call_email_agent: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+                
+                # Log failed inter-agent message
+                from services.audit_log_service import log_inter_agent_message
+                log_inter_agent_message(
+                    from_agent="orchestrator",
+                    to_agent="email_agent",
+                    capability=capability,
+                    parameters=parameters,
+                    success=False,
+                    error=error_msg
+                )
+                
+                # Return error dict instead of raising
+                return {"success": False, "error": error_msg}
+        
+        @self.pydantic_agent.tool
         def list_available_agents(ctx: RunContext[OrchestratorContext]) -> List[Dict[str, Any]]:
             """
             List all available agents and their capabilities.
@@ -934,7 +1068,7 @@ Always explain what you're doing and provide complete results."""
             ],
             metadata={
                 "model": "gpt-4o",
-                "coordinates_agents": ["expense_agent", "document_agent"]
+                "coordinates_agents": ["expense_agent", "document_agent", "email_agent"]
             }
         )
     
