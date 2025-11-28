@@ -624,18 +624,24 @@ EXAMPLE VALID OUTPUT for APPROVE (DO NOT COPY LITERALLY):
     }
     status = status_map[parsed.decision]
 
+    # Get old status before update
+    old_status = expense.get("status", "pending")
+    
     expense_repo.update(expense_id, {
         "status": status,
         "decision_actor": "AI",
         "decision_reason": f"{parsed.rule}: {parsed.reason}",
     })
 
-    # Audit Log
-    create_log({
-        "actor": "AI",
-        "expense_id": expense_id,
-        "log": f"{parsed.decision}, rule={parsed.rule}, reason={parsed.reason}",
-    })
+    # Audit Log - status change
+    from services.audit_log_service import log_expense_status_change
+    log_expense_status_change(
+        actor="AI",
+        expense_id=expense_id,
+        old_status=old_status,
+        new_status=status,
+        reason=f"{parsed.rule}: {parsed.reason}"
+    )
     logger.info(f"[AI] Decision: {parsed.decision}, rule={parsed.rule}, reason={parsed.reason}")
     
     # ============================================================
@@ -644,6 +650,7 @@ EXAMPLE VALID OUTPUT for APPROVE (DO NOT COPY LITERALLY):
     if status == "approved":
         try:
             from services import financial_service
+            from services.audit_log_service import log_payment_event
             
             # Get employee to find their bank account
             emp_id = expense.get('employee_id')
@@ -660,6 +667,16 @@ EXAMPLE VALID OUTPUT for APPROVE (DO NOT COPY LITERALLY):
                     new_balance = current_balance + expense_amount
                     financial_service.update_account_balance(bank_account_id, new_balance)
                     logger.info(f"[PAYMENT] Updated bank account {bank_account_id} balance: ${current_balance} -> ${new_balance} for expense {expense_id}")
+                    
+                    # Log payment event
+                    log_payment_event(
+                        expense_id=expense_id,
+                        employee_id=emp_id,
+                        amount=expense_amount,
+                        bank_account_id=bank_account_id,
+                        old_balance=current_balance,
+                        new_balance=new_balance
+                    )
                 else:
                     logger.warning(f"[PAYMENT] Could not retrieve balance for bank account {bank_account_id}")
             else:

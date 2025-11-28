@@ -3,6 +3,7 @@ from services.document_service import upload_receipt, generate_receipt_url
 from domain.schemas.expense_schema import ExpenseCreate, ExpenseOut
 from datetime import datetime
 from services.agents.expense_agent_service import auto_review_on_create
+from services import audit_log_service
 
 
 def create_expense(expense_create: ExpenseCreate, receipt_path: str = None):
@@ -77,9 +78,30 @@ def get_expense(expense_id: str):
     return expense_repo.get(expense_id)
 
 def update_expense(expense_id: str, data: dict):
+    # Get old expense to track status changes
+    old_expense = expense_repo.get(expense_id)
+    old_status = old_expense.get("status") if old_expense else None
+    
     data = data.copy()
     data["updated_at"] = datetime.utcnow().isoformat()
-    return expense_repo.update(expense_id, data)
+    result = expense_repo.update(expense_id, data)
+    
+    # Log status changes
+    new_status = data.get("status")
+    if new_status and old_status and new_status != old_status:
+        actor = data.get("decision_actor", "Human")
+        # Map decision_actor to audit log actor format
+        audit_actor = "AI" if actor == "AI" else "Human"
+        reason = data.get("decision_reason", "")
+        audit_log_service.log_expense_status_change(
+            actor=audit_actor,
+            expense_id=expense_id,
+            old_status=old_status,
+            new_status=new_status,
+            reason=reason
+        )
+    
+    return result
 
 def delete_expense(expense_id):
     return expense_repo.delete(expense_id)
