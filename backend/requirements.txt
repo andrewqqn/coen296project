@@ -157,3 +157,6 @@ yarl==1.22.0
 zipp==3.23.0
 zstandard==0.25.0
 sentence-transformers
+google-api-python-client>=2.0.0
+google-auth-oauthlib>=0.5.0
+google-auth-httplib2>=0.1.0

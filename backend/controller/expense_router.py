@@ -171,6 +171,77 @@ def review_expense(
         except Exception as e:
             logger.error(f"Failed to process payment for approved expense: {str(e)}")
     
+    # Send email notification to employee
+    try:
+        import asyncio
+        import threading
+        from services.agents.email_agent_service import email_agent
+        from services.agents.a2a_protocol import A2ARequest, create_a2a_message
+        
+        # Get employee email
+        expense_employee_id = expense.get('employee_id')
+        expense_employee = employee_service.get_employee(expense_employee_id)
+        
+        if expense_employee and expense_employee.get('email'):
+            employee_email = expense_employee['email']
+            
+            # Create email notification request
+            email_request = A2ARequest(
+                capability_name="send_expense_notification",
+                parameters={
+                    "to": employee_email,
+                    "expense_id": expense_id,
+                    "status": "approved" if action == "approve" else "rejected",
+                    "amount": float(expense.get('amount', 0)),
+                    "category": expense.get('category', 'N/A'),
+                    "decision_reason": f"Manual Review: {reason}"
+                },
+                context={"user_id": "admin", "role": "admin"}
+            )
+            
+            # Send via A2A protocol
+            message = create_a2a_message(
+                sender_id="admin_review",
+                recipient_id="email_agent",
+                message_type="request",
+                payload=email_request.model_dump(),
+                capability_name="send_expense_notification"
+            )
+            
+            # Send email notification in a separate thread to avoid blocking
+            def send_notification_sync():
+                try:
+                    # Create new event loop for this thread
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    
+                    response = loop.run_until_complete(
+                        email_agent.process_message(
+                            message,
+                            context={"user_id": "admin", "role": "admin"}
+                        )
+                    )
+                    
+                    if response.message_type == "response":
+                        logger.info(f"[EMAIL] Manual review notification sent to {employee_email} for expense {expense_id}")
+                    else:
+                        logger.warning(f"[EMAIL] Notification failed: {response.payload.get('error')}")
+                    
+                    loop.close()
+                except Exception as e:
+                    logger.error(f"[EMAIL] Failed to send notification: {str(e)}", exc_info=True)
+            
+            # Run in background thread (don't block the response)
+            thread = threading.Thread(target=send_notification_sync, daemon=True)
+            thread.start()
+            logger.info(f"[EMAIL] Notification queued for {employee_email} about expense {expense_id}")
+        else:
+            logger.warning(f"[EMAIL] Could not send notification - employee has no email")
+            
+    except Exception as e:
+        # Don't fail the review if email fails
+        logger.error(f"[EMAIL] Failed to queue notification: {str(e)}", exc_info=True)
+    
     return result
 
 

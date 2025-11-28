@@ -139,7 +139,7 @@ else:
 
 # Initialize multi-agent system
 print("Initializing multi-agent system...")
-from services.agents import expense_agent_service, document_agent_service, orchestrator_agent
+from services.agents import expense_agent_service, document_agent_service, orchestrator_agent, email_agent_service
 from services.agents.a2a_protocol import agent_registry
 
 registered_agents = agent_registry.list_agents()
