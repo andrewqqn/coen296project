@@ -77,6 +77,17 @@ def require_role(*required_roles: str):
                         f"Access denied: User {ctx.deps.user_id} with role '{user_role}' "
                         f"attempted to use tool '{func.__name__}' which requires one of: {required_roles}"
                     )
+                    
+                    # Log unauthorized access attempt
+                    from services.audit_log_service import log_unauthorized_access
+                    log_unauthorized_access(
+                        actor="Human",
+                        user_id=ctx.deps.user_id,
+                        resource=func.__name__,
+                        action="invoke_tool",
+                        reason=f"User role '{user_role}' does not have required role(s): {', '.join(required_roles)}"
+                    )
+                    
                     return {
                         "error": f"Access denied: This operation requires one of the following roles: {', '.join(required_roles)}",
                         "required_roles": list(required_roles),
@@ -113,6 +124,17 @@ def require_role(*required_roles: str):
                         f"Access denied: User {ctx.deps.user_id} with role '{user_role}' "
                         f"attempted to use tool '{func.__name__}' which requires one of: {required_roles}"
                     )
+                    
+                    # Log unauthorized access attempt
+                    from services.audit_log_service import log_unauthorized_access
+                    log_unauthorized_access(
+                        actor="Human",
+                        user_id=ctx.deps.user_id,
+                        resource=func.__name__,
+                        action="invoke_tool",
+                        reason=f"User role '{user_role}' does not have required role(s): {', '.join(required_roles)}"
+                    )
+                    
                     return {
                         "error": f"Access denied: This operation requires one of the following roles: {', '.join(required_roles)}",
                         "required_roles": list(required_roles),

@@ -191,6 +191,7 @@ Always explain what you're doing and provide complete results."""
                 
                 # Import here to avoid circular dependency
                 from services.agents.expense_agent_service import expense_agent
+                from services.audit_log_service import log_inter_agent_message
                 
                 request = A2ARequest(
                     capability_name=capability,
@@ -214,15 +215,48 @@ Always explain what you're doing and provide complete results."""
                 if response_message.message_type == "error":
                     error = response_message.payload.get("error", "Unknown error")
                     logger.error(f"Error from expense_agent: {error}")
+                    
+                    # Log failed inter-agent message
+                    log_inter_agent_message(
+                        from_agent="orchestrator",
+                        to_agent="expense_agent",
+                        capability=capability,
+                        parameters=parameters,
+                        success=False,
+                        error=error
+                    )
+                    
                     return {"success": False, "error": error}
                 
                 result = response_message.payload.get("result", {})
                 logger.info(f"Expense agent returned: {result}")
+                
+                # Log successful inter-agent message
+                log_inter_agent_message(
+                    from_agent="orchestrator",
+                    to_agent="expense_agent",
+                    capability=capability,
+                    parameters=parameters,
+                    success=True
+                )
+                
                 return {"success": True, **result}
                 
             except Exception as e:
                 error_msg = f"Exception calling expense_agent: {str(e)}"
                 logger.error(error_msg, exc_info=True)
+                
+                # Log failed inter-agent message
+                from services.audit_log_service import log_inter_agent_message
+                log_inter_agent_message(
+                    from_agent="orchestrator",
+                    to_agent="expense_agent",
+                    capability=capability,
+                    parameters=parameters,
+                    success=False,
+                    error=error_msg
+                )
+                
                 # Return error dict instead of raising
                 return {"success": False, "error": error_msg}
         
@@ -256,6 +290,7 @@ Always explain what you're doing and provide complete results."""
                 # Import here to avoid circular dependency
                 try:
                     from services.agents.document_agent_service import document_agent
+                    from services.audit_log_service import log_inter_agent_message
                     logger.info("[TOOL] Document agent imported successfully")
                 except Exception as import_error:
                     error_msg = f"Failed to import document_agent: {str(import_error)}"
@@ -300,21 +335,65 @@ Always explain what you're doing and provide complete results."""
                 except Exception as process_error:
                     error_msg = f"Failed to process message: {str(process_error)}"
                     logger.error(error_msg, exc_info=True)
+                    
+                    # Log failed inter-agent message
+                    log_inter_agent_message(
+                        from_agent="orchestrator",
+                        to_agent="document_agent",
+                        capability=capability,
+                        parameters={"file_path": file_path},
+                        success=False,
+                        error=error_msg
+                    )
+                    
                     return {"success": False, "error": error_msg}
                 
                 # Check response
                 if response_message.message_type == "error":
                     error = response_message.payload.get("error", "Unknown error")
                     logger.error(f"[TOOL] Error from document_agent: {error}")
+                    
+                    # Log failed inter-agent message
+                    log_inter_agent_message(
+                        from_agent="orchestrator",
+                        to_agent="document_agent",
+                        capability=capability,
+                        parameters={"file_path": file_path},
+                        success=False,
+                        error=error
+                    )
+                    
                     return {"success": False, "error": error}
                 
                 result = response_message.payload.get("result", {})
                 logger.info(f"[TOOL SUCCESS] Document agent returned: {result}")
+                
+                # Log successful inter-agent message
+                log_inter_agent_message(
+                    from_agent="orchestrator",
+                    to_agent="document_agent",
+                    capability=capability,
+                    parameters={"file_path": file_path},
+                    success=True
+                )
+                
                 return {"success": True, **result}
                 
             except Exception as e:
                 error_msg = f"[TOOL EXCEPTION] Unexpected exception in call_document_agent: {str(e)}"
                 logger.error(error_msg, exc_info=True)
+                
+                # Log failed inter-agent message
+                from services.audit_log_service import log_inter_agent_message
+                log_inter_agent_message(
+                    from_agent="orchestrator",
+                    to_agent="document_agent",
+                    capability=capability,
+                    parameters={"file_path": file_path},
+                    success=False,
+                    error=error_msg
+                )
+                
                 # Return error dict instead of raising - THIS MUST NOT RAISE!
                 return {"success": False, "error": error_msg}
         
@@ -759,6 +838,17 @@ Always explain what you're doing and provide complete results."""
                     f"Processed payment for expense {expense_id}: "
                     f"${expense_amount} added to account {bank_account_id} "
                     f"(${current_balance} -> ${new_balance})"
+                )
+                
+                # Log payment event
+                from services.audit_log_service import log_payment_event
+                log_payment_event(
+                    expense_id=expense_id,
+                    employee_id=emp_id,
+                    amount=expense_amount,
+                    bank_account_id=bank_account_id,
+                    old_balance=current_balance,
+                    new_balance=new_balance
                 )
                 
                 return {

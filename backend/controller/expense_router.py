@@ -4,8 +4,11 @@ from domain.schemas.expense_schema import (ExpenseCreate, ExpenseOut, ExpenseUpd
 from fastapi import UploadFile, File, Form
 from infrastructure.auth_middleware import verify_firebase_token
 import json
+import logging
 
 from typing import List
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/expenses", tags=["Expense"])
 
@@ -126,14 +129,49 @@ def review_expense(
     if action not in ["approve", "reject"]:
         raise HTTPException(status_code=400, detail="Action must be 'approve' or 'reject'")
     
-    # Update expense
+    # Update expense (this will automatically log the status change via expense_service)
     update_data = {
         "status": "approved" if action == "approve" else "rejected",
         "decision_actor": "Human",
         "decision_reason": reason
     }
     
-    return expense_service.update_expense(expense_id, update_data)
+    result = expense_service.update_expense(expense_id, update_data)
+    
+    # If approved, process payment
+    if action == "approve":
+        try:
+            from services import financial_service
+            from services.audit_log_service import log_payment_event
+            
+            # Get employee to find their bank account
+            expense_employee_id = expense.get('employee_id')
+            expense_employee = employee_service.get_employee(expense_employee_id)
+            
+            if expense_employee and expense_employee.get('bank_account_id'):
+                bank_account_id = expense_employee['bank_account_id']
+                expense_amount = float(expense.get('amount', 0))
+                
+                # Get current balance
+                current_balance = financial_service.get_account_balance(bank_account_id)
+                if current_balance is not None:
+                    # Add expense amount to balance
+                    new_balance = current_balance + expense_amount
+                    financial_service.update_account_balance(bank_account_id, new_balance)
+                    
+                    # Log payment event
+                    log_payment_event(
+                        expense_id=expense_id,
+                        employee_id=expense_employee_id,
+                        amount=expense_amount,
+                        bank_account_id=bank_account_id,
+                        old_balance=current_balance,
+                        new_balance=new_balance
+                    )
+        except Exception as e:
+            logger.error(f"Failed to process payment for approved expense: {str(e)}")
+    
+    return result
 
 
 @router.get("/{expense_id}/receipt-url")
