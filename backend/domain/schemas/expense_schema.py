@@ -19,7 +19,7 @@ class ExpenseOut(BaseModel):
     business_justification: str
     category: Literal["Travel", "Meals", "Conference", "Other"] = "Other"
 
-    status: Literal["pending", "approved", "rejected", "admin-review"] = "pending"
+    status: Literal["pending", "approved", "rejected", "admin_review"] = "pending"
     decision_actor: str = None
     decision_reason: str = None
 

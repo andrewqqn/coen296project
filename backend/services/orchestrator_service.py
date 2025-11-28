@@ -293,7 +293,7 @@ def register_expense_tools(agent: Agent, role: Literal["employee", "admin"]):
                 decision_actor = updated_expense.get('decision_actor')
                 
                 # Check if AI has made a decision
-                if decision_actor == 'AI' and status in ['approved', 'rejected', 'admin-review']:
+                if decision_actor == 'AI' and status in ['approved', 'rejected', 'admin_review']:
                     logger.info(f"AI review completed with status: {status}")
                     
                     # Add review result to the response
@@ -697,7 +697,7 @@ async def process_query(
                     response_text += f"\n\n✅ **Expense Approved!**\nYour expense of ${amount} has been automatically approved by our AI system."
                 elif status == 'rejected':
                     response_text += f"\n\n❌ **Expense Rejected**\nYour expense of ${amount} was rejected. Reason: {reason}"
-                elif status == 'admin-review':
+                elif status == 'admin_review':
                     response_text += f"\n\n⏳ **Manual Review Required**\nYour expense of ${amount} has been flagged for manual review by an administrator. Reason: {reason}"
             else:
                 response_text += f"\n\n⏳ **Review Pending**\nYour expense has been submitted and is being reviewed. Please check back shortly."
