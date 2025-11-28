@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, AlertCircle, Receipt, Calendar, DollarSign, FileText, CheckCircle, XCircle, User, Mail } from "lucide-react";
+import { Loader2, AlertCircle, Receipt, Calendar, DollarSign, FileText, CheckCircle, XCircle, User, Mail, ExternalLink } from "lucide-react";
 
 interface Expense {
   expense_id: string;
@@ -44,6 +44,7 @@ export function ExpenseList() {
   const [reviewingExpenseId, setReviewingExpenseId] = useState<string | null>(null);
   const [reviewReason, setReviewReason] = useState<string>("");
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [loadingReceiptUrl, setLoadingReceiptUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -173,6 +174,37 @@ export function ExpenseList() {
     }
   };
 
+  const handleViewReceipt = async (expenseId: string) => {
+    setLoadingReceiptUrl(expenseId);
+    setError(null);
+
+    try {
+      const token = await getAuthToken();
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+
+      const response = await fetch(`${backendUrl}/expenses/${expenseId}/receipt-url`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to get receipt URL");
+      }
+
+      const data = await response.json();
+      
+      // Open receipt in new tab
+      window.open(data.url, "_blank");
+    } catch (err) {
+      console.error("Error fetching receipt URL:", err);
+      setError(err instanceof Error ? err.message : "Failed to load receipt");
+    } finally {
+      setLoadingReceiptUrl(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -284,9 +316,22 @@ export function ExpenseList() {
                 )}
 
                 {expense.receipt_path && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Receipt className="h-4 w-4" />
-                    <span>Receipt attached</span>
+                  <div className="pt-2 border-t">
+                    <Button
+                      onClick={() => handleViewReceipt(expense.expense_id)}
+                      disabled={loadingReceiptUrl === expense.expense_id}
+                      variant="outline"
+                      size="sm"
+                      className="w-full sm:w-auto"
+                    >
+                      {loadingReceiptUrl === expense.expense_id ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : (
+                        <Receipt className="h-4 w-4 mr-2" />
+                      )}
+                      View Receipt
+                      <ExternalLink className="h-3 w-3 ml-2" />
+                    </Button>
                   </div>
                 )}
 

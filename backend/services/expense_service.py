@@ -1,5 +1,5 @@
 from domain.repositories import expense_repo
-from services.document_service import upload_receipt
+from services.document_service import upload_receipt, generate_receipt_url
 from domain.schemas.expense_schema import ExpenseCreate, ExpenseOut
 from datetime import datetime
 from services.agents.expense_agent_service import auto_review_on_create
@@ -86,3 +86,16 @@ def delete_expense(expense_id):
 
 def get_by_employee(employee_id: str):
     return expense_repo.get_by_employee(employee_id)
+
+def get_receipt_url(receipt_path: str, expire_seconds: int = 3600):
+    """
+    Generate a signed URL for viewing/downloading a receipt.
+    
+    Args:
+        receipt_path: Path to the receipt in storage
+        expire_seconds: URL expiration time in seconds (default 1 hour)
+    
+    Returns:
+        Signed URL string
+    """
+    return generate_receipt_url(receipt_path, expire_seconds)
