@@ -88,9 +88,9 @@ export default function Home() {
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex h-full flex-col">
+        <div className="flex h-screen flex-col">
           {/* Header with frosted glass panel and glow effect */}
-          <div className="relative border-b p-4">
+          <div className="relative flex-shrink-0 border-b p-4">
             <div className="flex items-center justify-between">
               {/* Frosted glass panel with white glow behind it */}
               <div className="relative">
@@ -118,7 +118,7 @@ export default function Home() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 space-y-1 p-3">
+          <nav className="flex-1 overflow-y-auto space-y-1 p-3">
             {navItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -143,7 +143,7 @@ export default function Home() {
           </nav>
 
           {/* User info and logout */}
-          <div className="border-t p-4">
+          <div className="flex-shrink-0 border-t p-4">
             <div className="mb-3 space-y-1">
               <p className="text-sm font-medium">{user.email}</p>
             </div>
@@ -169,9 +169,9 @@ export default function Home() {
       )}
 
       {/* Main content */}
-      <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col h-screen overflow-hidden">
         {/* Mobile header */}
-        <header className="flex items-center gap-4 border-b p-4 lg:hidden">
+        <header className="flex items-center gap-4 border-b p-4 lg:hidden flex-shrink-0">
           <Button
             variant="ghost"
             size="icon"
@@ -183,7 +183,7 @@ export default function Home() {
         </header>
 
         {/* Content area */}
-        <main className="flex-1 overflow-hidden">
+        <main className="flex-1 overflow-y-auto">
           {activeView === "query" ? (
             <div className="flex h-full">
               {/* Main chat area - takes up most of the space */}
