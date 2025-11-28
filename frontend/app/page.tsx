@@ -14,10 +14,18 @@ import { cn } from "@/lib/utils";
 
 type View = "query" | "expenses" | "submit" | "account" | "policies";
 
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export default function Home() {
   const { user, loading } = useAuth();
   const [activeView, setActiveView] = useState<View>("query");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
+  const [isQueryLoading, setIsQueryLoading] = useState(false);
+  const [queryText, setQueryText] = useState("");
 
   if (loading) {
     return (
@@ -42,6 +50,18 @@ export default function Home() {
     { id: "policies" as View, label: "Policies", icon: FileText },
     { id: "account" as View, label: "Account", icon: UserCircle },
   ];
+
+  const exampleQueries = [
+    "What are the reimbursement policies?",
+    "What are the expense limits for meals?",
+    "Show me all expenses",
+    "List all employees",
+    "What are the approval rules?"
+  ];
+
+  const handleExampleClick = (query: string) => {
+    setQueryText(query);
+  };
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -147,82 +167,107 @@ export default function Home() {
         </header>
 
         {/* Content area */}
-        <main className="flex-1 overflow-auto">
-          <div className="container mx-auto max-w-5xl p-6">
-            {activeView === "query" && (
-              <div className="space-y-8">
-                <div className="space-y-2">
+        <main className="flex-1 overflow-hidden">
+          {activeView === "query" ? (
+            <div className="flex h-full">
+              {/* Main chat area - takes up most of the space */}
+              <div className="flex-1 flex flex-col h-full">
+                <div className="p-6 pb-4">
                   <h1 className="text-3xl font-bold tracking-tight">Query</h1>
                   <p className="text-muted-foreground">
                     Ask questions in natural language about employees, expenses, policies, and audit logs
                   </p>
                 </div>
                 
-                <OrchestratorQuery />
-
-                <div className="rounded-lg border bg-muted/50 p-4">
-                  <p className="mb-2 text-sm font-semibold">Try these example queries:</p>
-                  <ul className="space-y-1 text-sm text-muted-foreground">
-                    <li>&quot;What are the reimbursement policies?&quot;</li>
-                    <li>&quot;What are the expense limits for meals?&quot;</li>
-                    <li>&quot;Show me all expenses&quot;</li>
-                    <li>&quot;List all employees&quot;</li>
-                    <li>&quot;What are the approval rules?&quot;</li>
-                  </ul>
+                <div className="flex-1 overflow-hidden px-6 pb-6">
+                  <OrchestratorQuery 
+                    conversationHistory={conversationHistory}
+                    setConversationHistory={setConversationHistory}
+                    isLoading={isQueryLoading}
+                    setIsLoading={setIsQueryLoading}
+                    queryText={queryText}
+                    setQueryText={setQueryText}
+                  />
                 </div>
               </div>
-            )}
 
-            {activeView === "expenses" && (
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <h1 className="text-3xl font-bold tracking-tight">Expenses</h1>
-                  <p className="text-muted-foreground">
-                    View and manage your expense submissions
-                  </p>
+              {/* Example queries sidebar - fixed width on the right */}
+              <aside className="hidden lg:block w-80 border-l bg-muted/30 p-6 overflow-y-auto">
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="text-lg font-semibold mb-2">Example Queries</h2>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Try these queries to get started
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {exampleQueries.map((query, index) => (
+                      <div 
+                        key={index}
+                        onClick={() => handleExampleClick(query)}
+                        className="rounded-lg border bg-background p-3 hover:bg-accent/50 transition-colors cursor-pointer"
+                      >
+                        <p className="text-sm">&quot;{query}&quot;</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <ExpenseList />
-              </div>
-            )}
+              </aside>
+            </div>
+          ) : (
+            <div className="container mx-auto max-w-5xl p-6 overflow-auto h-full">
+              {activeView === "expenses" && (
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <h1 className="text-3xl font-bold tracking-tight">Expenses</h1>
+                    <p className="text-muted-foreground">
+                      View and manage your expense submissions
+                    </p>
+                  </div>
+                  <ExpenseList />
+                </div>
+              )}
 
-            {activeView === "submit" && (
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <h1 className="text-3xl font-bold tracking-tight">Submit Expense</h1>
-                  <p className="text-muted-foreground">
-                    Submit a new expense report with receipt
-                  </p>
+              {activeView === "submit" && (
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <h1 className="text-3xl font-bold tracking-tight">Submit Expense</h1>
+                    <p className="text-muted-foreground">
+                      Submit a new expense report with receipt
+                    </p>
+                  </div>
+                  <div className="flex justify-center">
+                    <ExpenseForm />
+                  </div>
                 </div>
-                <div className="flex justify-center">
-                  <ExpenseForm />
-                </div>
-              </div>
-            )}
+              )}
 
-            {activeView === "policies" && (
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <h1 className="text-3xl font-bold tracking-tight">Policies</h1>
-                  <p className="text-muted-foreground">
-                    Expense reimbursement policies and approval decision-making rules
-                  </p>
+              {activeView === "policies" && (
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <h1 className="text-3xl font-bold tracking-tight">Policies</h1>
+                    <p className="text-muted-foreground">
+                      Expense reimbursement policies and approval decision-making rules
+                    </p>
+                  </div>
+                  <Policies />
                 </div>
-                <Policies />
-              </div>
-            )}
+              )}
 
-            {activeView === "account" && (
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <h1 className="text-3xl font-bold tracking-tight">Account</h1>
-                  <p className="text-muted-foreground">
-                    View your employee account details
-                  </p>
+              {activeView === "account" && (
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <h1 className="text-3xl font-bold tracking-tight">Account</h1>
+                    <p className="text-muted-foreground">
+                      View your employee account details
+                    </p>
+                  </div>
+                  <AccountDetails />
                 </div>
-                <AccountDetails />
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </main>
       </div>
     </div>
