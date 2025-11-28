@@ -49,6 +49,15 @@ class OrchestratorAgent(BaseAgent):
 
 Your role is to understand user requests and coordinate with specialized agents to fulfill them.
 
+IMPORTANT: When users ask about policies, rules, limits, or approval processes:
+- ALWAYS use the query_policies tool to retrieve accurate information from the policy database
+- Present the information clearly with specific amounts, limits, and rules
+- Reference the approval rules (R1-R4) when relevant:
+  * R1: Auto-approve (≤$500, first request of day, valid receipt)
+  * R2: Manual review (multiple requests same day)
+  * R3: Manual review (>$500)
+  * R4: Auto-reject (invalid/missing receipt)
+
 Available specialized agents:
 1. Expense Agent - Reviews expenses, applies policy rules, validates receipts
 2. Document Agent - Processes PDF receipts, extracts structured information
@@ -75,6 +84,9 @@ Common workflows:
   4. Use get_expense to check the review result
 - List expenses → Use list_expenses tool
 - Query policies → Use query_policies tool (e.g., "meal limits", "travel policy", "receipt requirements")
+  * For policy questions, ALWAYS use query_policies to get accurate information from the policy database
+  * Common policy queries: "reimbursement policies", "expense limits", "approval rules", "receipt requirements", "category limits"
+  * Present policy information clearly with specific limits and rules
 - Manage employees (admin only) → Use list_employees, get_employee, create_employee, update_employee, delete_employee
 
 CRITICAL: File Upload and Expense Creation Workflow

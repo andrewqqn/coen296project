@@ -5,13 +5,14 @@ import { OrchestratorQuery } from "@/components/orchestrator-query";
 import { ExpenseForm } from "@/components/expense-form";
 import { ExpenseList } from "@/components/expense-list";
 import { AccountDetails } from "@/components/account-details";
+import { Policies } from "@/components/policies";
 import { Login, signOut } from "@/components/login";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
-import { Loader2, LogOut, MessageSquare, Receipt, Upload, Menu, X, UserCircle } from "lucide-react";
+import { Loader2, LogOut, MessageSquare, Receipt, Upload, Menu, X, UserCircle, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type View = "query" | "expenses" | "submit" | "account";
+type View = "query" | "expenses" | "submit" | "account" | "policies";
 
 export default function Home() {
   const { user, loading } = useAuth();
@@ -38,6 +39,7 @@ export default function Home() {
     { id: "query" as View, label: "Query", icon: MessageSquare },
     { id: "expenses" as View, label: "Expenses", icon: Receipt },
     { id: "submit" as View, label: "Submit Expense", icon: Upload },
+    { id: "policies" as View, label: "Policies", icon: FileText },
     { id: "account" as View, label: "Account", icon: UserCircle },
   ];
 
@@ -161,10 +163,11 @@ export default function Home() {
                 <div className="rounded-lg border bg-muted/50 p-4">
                   <p className="mb-2 text-sm font-semibold">Try these example queries:</p>
                   <ul className="space-y-1 text-sm text-muted-foreground">
-                    <li>&quot;List all employees&quot;</li>
-                    <li>&quot;Show me all expenses&quot;</li>
                     <li>&quot;What are the reimbursement policies?&quot;</li>
-                    <li>&quot;Show me recent audit logs&quot;</li>
+                    <li>&quot;What are the expense limits for meals?&quot;</li>
+                    <li>&quot;Show me all expenses&quot;</li>
+                    <li>&quot;List all employees&quot;</li>
+                    <li>&quot;What are the approval rules?&quot;</li>
                   </ul>
                 </div>
               </div>
@@ -193,6 +196,18 @@ export default function Home() {
                 <div className="flex justify-center">
                   <ExpenseForm />
                 </div>
+              </div>
+            )}
+
+            {activeView === "policies" && (
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <h1 className="text-3xl font-bold tracking-tight">Policies</h1>
+                  <p className="text-muted-foreground">
+                    Expense reimbursement policies and approval decision-making rules
+                  </p>
+                </div>
+                <Policies />
               </div>
             )}
 
