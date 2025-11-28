@@ -66,10 +66,21 @@ async def orchestrate_query(
     - "Update employee emp123 to change their department to Engineering"
     """
     try:
-        employee_id = user_claims.get("uid")
+        firebase_uid = user_claims.get("uid")
         role = user_claims.get("role", "employee")
         
-        logger.info(f"[LEGACY] Received query from user {employee_id}: {request.query}")
+        # Convert Firebase UID to internal employee_id
+        from services import employee_service
+        employee = employee_service.get_employee_by_auth_id(firebase_uid)
+        if not employee:
+            raise HTTPException(
+                status_code=404,
+                detail="Employee profile not found. Please contact an administrator."
+            )
+        
+        employee_id = employee.get("employee_id")
+        
+        logger.info(f"[LEGACY] Received query from user {employee_id} (Firebase UID: {firebase_uid}): {request.query}")
         logger.info(f"[LEGACY] Redirecting to multi-agent system")
         
         # Use the new multi-agent system

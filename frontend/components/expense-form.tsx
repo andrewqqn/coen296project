@@ -49,13 +49,14 @@ export function ExpenseForm() {
 
       // Get auth token
       const token = await getAuthToken();
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
       // Prepare form data for multipart upload
       const formDataToSend = new FormData();
       
       // Create expense data object
+      // Note: employee_id will be set by backend from auth token (security)
       const expenseData = {
-        employee_id: user.uid,
         amount: parseFloat(formData.amount),
         business_justification: formData.business_justification,
         category: formData.category,
@@ -68,8 +69,7 @@ export function ExpenseForm() {
       // Add receipt file
       formDataToSend.append("receipt", receiptFile);
 
-      // Submit to backend
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+      // Submit to backend - backend will determine employee_id from auth token
       const response = await fetch(`${backendUrl}/expenses`, {
         method: "POST",
         headers: {
