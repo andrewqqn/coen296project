@@ -54,15 +54,16 @@ Available specialized agents:
 2. Document Agent - Processes PDF receipts, extracts structured information
 
 Available direct tools:
-1. create_expense - Create a new expense record
+1. create_expense - Create a new expense record (automatically processes payment if approved)
 2. list_expenses - List all expenses (filtered by role)
 3. get_expense - Get details of a specific expense
 4. query_policies - Search the reimbursement policy database
-5. list_employees - List all employees (admin only)
-6. get_employee - Get employee details (admin only)
-7. create_employee - Create a new employee (admin only)
-8. update_employee - Update employee information (admin only)
-9. delete_employee - Delete an employee (admin only)
+5. process_approved_expense_payment - Process payment for an approved expense (admin only)
+6. list_employees - List all employees (admin only)
+7. get_employee - Get employee details (admin only)
+8. create_employee - Create a new employee (admin only)
+9. update_employee - Update employee information (admin only)
+10. delete_employee - Delete an employee (admin only)
 
 Common workflows:
 - Review an expense → Use expense_agent's review_expense capability
@@ -101,6 +102,7 @@ Step 3: Create the expense with receipt
 - Note: For employees, the tool automatically uses ctx.deps.user_id regardless of employee_id parameter
 - This creates the expense AND automatically triggers AI review
 - The tool waits for review to complete and returns the result
+- If approved, the employee's bank account balance is AUTOMATICALLY increased by the expense amount
 - Response includes: expense_id, status, decision_reason, review_completed
 
 Step 4: Present the complete result
@@ -123,7 +125,7 @@ Your Actions:
    Returns: {vendor: "Starbucks", amount: 12.45, date: "2025-01-15", category: "meals", description: "Coffee"}
 3. Call: create_expense(employee_id=ctx.deps.user_id, amount=12.45, category="Meals", business_justification="Coffee", date_of_expense="2025-01-15", receipt_path="local://uploads/receipts/emp_123/receipt.pdf")
 4. Tool returns: {success: True, expense_id: "exp_xyz", status: "approved", decision_reason: "Receipt valid, within policy", review_completed: True}
-5. Tell user: "✅ Created expense exp_xyz for $12.45 at Starbucks. Status: APPROVED. Reason: Receipt valid, within policy limits."
+5. Tell user: "✅ Created expense exp_xyz for $12.45 at Starbucks. Status: APPROVED. Reason: Receipt valid, within policy limits. Your bank account has been credited with $12.45."
 
 If status is "rejected":
 "❌ Created expense exp_xyz for $12.45 at Starbucks. Status: REJECTED. Reason: [decision_reason]"
@@ -618,6 +620,10 @@ Always explain what you're doing and provide complete results."""
                             
                             if decision_actor == 'AI' and status in ['approved', 'rejected', 'admin-review']:
                                 logger.info(f"AI review completed with status: {status}")
+                                
+                                # Note: Bank account is automatically updated by expense_agent_service
+                                # when status is 'approved'. No need to do it here.
+                                
                                 return {
                                     "success": True,
                                     "expense": updated_expense,
@@ -673,6 +679,89 @@ Always explain what you're doing and provide complete results."""
             except Exception as e:
                 logger.error(f"Error listing expenses: {str(e)}", exc_info=True)
                 return []
+        
+        @self.pydantic_agent.tool
+        @require_role("admin")
+        def process_approved_expense_payment(
+            ctx: RunContext[OrchestratorContext],
+            expense_id: str
+        ) -> Dict[str, Any]:
+            """
+            Process payment for an approved expense by updating the employee's bank account balance.
+            This is typically called automatically when an expense is approved, but can be manually
+            triggered by admins if needed. Admin only.
+            
+            Args:
+                expense_id: The expense ID to process payment for
+            
+            Returns:
+                Dictionary with payment processing result
+            """
+            from services import expense_service, employee_service, financial_service
+            
+            logger.info(f"Admin {ctx.deps.user_id} processing payment for expense {expense_id}")
+            
+            try:
+                # Get the expense
+                expense = expense_service.get_expense(expense_id)
+                if not expense:
+                    return {"success": False, "error": f"Expense {expense_id} not found"}
+                
+                # Check if expense is approved
+                if expense.get('status') != 'approved':
+                    return {
+                        "success": False,
+                        "error": f"Expense {expense_id} is not approved (status: {expense.get('status')})"
+                    }
+                
+                # Get employee
+                emp_id = expense.get('employee_id')
+                employee = employee_service.get_employee(emp_id)
+                if not employee:
+                    return {"success": False, "error": f"Employee {emp_id} not found"}
+                
+                # Get bank account
+                bank_account_id = employee.get('bank_account_id')
+                if not bank_account_id:
+                    return {
+                        "success": False,
+                        "error": f"Employee {emp_id} does not have a linked bank account"
+                    }
+                
+                # Get current balance
+                current_balance = financial_service.get_account_balance(bank_account_id)
+                if current_balance is None:
+                    return {
+                        "success": False,
+                        "error": f"Could not retrieve balance for bank account {bank_account_id}"
+                    }
+                
+                # Calculate new balance
+                expense_amount = float(expense.get('amount', 0))
+                new_balance = current_balance + expense_amount
+                
+                # Update balance
+                financial_service.update_account_balance(bank_account_id, new_balance)
+                
+                logger.info(
+                    f"Processed payment for expense {expense_id}: "
+                    f"${expense_amount} added to account {bank_account_id} "
+                    f"(${current_balance} -> ${new_balance})"
+                )
+                
+                return {
+                    "success": True,
+                    "expense_id": expense_id,
+                    "employee_id": emp_id,
+                    "bank_account_id": bank_account_id,
+                    "amount_paid": expense_amount,
+                    "previous_balance": current_balance,
+                    "new_balance": new_balance
+                }
+                
+            except Exception as e:
+                logger.error(f"Error processing payment: {str(e)}", exc_info=True)
+                return {"success": False, "error": str(e)}
         
         @self.pydantic_agent.tool
         @require_role("employee", "admin")

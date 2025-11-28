@@ -637,6 +637,35 @@ EXAMPLE VALID OUTPUT for APPROVE (DO NOT COPY LITERALLY):
         "log": f"{parsed.decision}, rule={parsed.rule}, reason={parsed.reason}",
     })
     logger.info(f"[AI] Decision: {parsed.decision}, rule={parsed.rule}, reason={parsed.reason}")
+    
+    # ============================================================
+    # Update Bank Account Balance if Approved
+    # ============================================================
+    if status == "approved":
+        try:
+            from services import financial_service
+            
+            # Get employee to find their bank account
+            emp_id = expense.get('employee_id')
+            employee_data = get_employee(emp_id)
+            
+            if employee_data and employee_data.get('bank_account_id'):
+                bank_account_id = employee_data['bank_account_id']
+                expense_amount = float(expense.get('amount', 0))
+                
+                # Get current balance
+                current_balance = financial_service.get_account_balance(bank_account_id)
+                if current_balance is not None:
+                    # Add expense amount to balance
+                    new_balance = current_balance + expense_amount
+                    financial_service.update_account_balance(bank_account_id, new_balance)
+                    logger.info(f"[PAYMENT] Updated bank account {bank_account_id} balance: ${current_balance} -> ${new_balance} for expense {expense_id}")
+                else:
+                    logger.warning(f"[PAYMENT] Could not retrieve balance for bank account {bank_account_id}")
+            else:
+                logger.warning(f"[PAYMENT] Employee {emp_id} does not have a bank_account_id")
+        except Exception as e:
+            logger.error(f"[PAYMENT] Failed to update bank account balance: {str(e)}", exc_info=True)
 
     return parsed
 

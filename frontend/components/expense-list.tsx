@@ -42,7 +42,6 @@ export function ExpenseList() {
     if (user) {
       fetchData();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const fetchData = async () => {
@@ -67,42 +66,21 @@ export function ExpenseList() {
       const employeeData = await employeeResponse.json();
       setEmployee(employeeData);
 
-      // Fetch expenses based on role
-      let expensesData: Expense[];
-      
-      if (employeeData.role === "admin") {
-        // Admin: fetch all expenses
-        const expensesResponse = await fetch(`${backendUrl}/expenses`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+      // Fetch expenses - backend handles filtering based on role
+      const expensesResponse = await fetch(`${backendUrl}/expenses`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-        if (!expensesResponse.ok) {
-          throw new Error("Failed to fetch expenses");
-        }
-
-        expensesData = await expensesResponse.json();
-      } else {
-        // Employee: fetch only their expenses
-        const expensesResponse = await fetch(`${backendUrl}/expenses`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!expensesResponse.ok) {
-          throw new Error("Failed to fetch expenses");
-        }
-
-        const allExpenses = await expensesResponse.json();
-        expensesData = allExpenses.filter(
-          (exp: Expense) => exp.employee_id === user?.uid
-        );
+      if (!expensesResponse.ok) {
+        throw new Error("Failed to fetch expenses");
       }
 
+      const expensesData: Expense[] = await expensesResponse.json();
+
       // Sort by submitted date (newest first)
-      expensesData.sort((a, b) => 
+      expensesData.sort((a: Expense, b: Expense) => 
         new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime()
       );
 
