@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { OrchestratorQuery } from "@/components/orchestrator-query";
 import { ExpenseForm } from "@/components/expense-form";
 import { ExpenseList } from "@/components/expense-list";
@@ -26,6 +26,22 @@ export default function Home() {
   const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
   const [isQueryLoading, setIsQueryLoading] = useState(false);
   const [queryText, setQueryText] = useState("");
+  const previousUserIdRef = useRef<string | null>(null);
+
+  // Clear conversation history when user changes (account switch)
+  // This prevents users from seeing another user's chat messages
+  // Note: Setting state in useEffect is intentional here to handle account switching
+  useEffect(() => {
+    const currentUserId = user?.uid || null;
+    
+    // If user changed (not initial mount), clear the conversation
+    if (previousUserIdRef.current !== null && previousUserIdRef.current !== currentUserId) {
+      setConversationHistory([]);
+      setQueryText("");
+    }
+    
+    previousUserIdRef.current = currentUserId;
+  }, [user?.uid]);
 
   if (loading) {
     return (
