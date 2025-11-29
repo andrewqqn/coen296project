@@ -12,11 +12,11 @@ Add and run your own Red Team tests and gather evidence.
 # Cloud Run Expense Back
 
 ```
-gcloud builds submit --tag us-central1-docker.pkg.dev/expensense-8110a/expense-back:latest```
+gcloud builds submit --tag us-central1-docker.pkg.dev/expensense-8110a/expense-back/expense-back:latest
 
 ```
 gcloud run deploy expense-back \
-  --image gcr.io/expensense-8110a/expense-back \
+  --image us-central1-docker.pkg.dev/expensense-8110a/expense-back/expense-back:latest \
   --region us-central1 \
   --platform managed \
   --allow-unauthenticated \
