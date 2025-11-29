@@ -336,6 +336,7 @@ async def evaluate_and_maybe_auto_approve(expense_id: str):
     # Employee Profile
     if need_profile:
         try:
+            from services.employee_service import get_employee
             tools_results["employee_profile"] = to_json_safe(
                 get_employee(expense["employee_id"])
             )
