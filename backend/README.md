@@ -112,8 +112,6 @@ Paste that token into the **“Authorize”** dialog in Swagger UI
 }
 ```
 
-
-
 ## Create Expense
 ### Safe Expense example:
 ```
@@ -125,6 +123,7 @@ Paste that token into the **“Authorize”** dialog in Swagger UI
     "business_justification": "Attending conference to present a paper. And this is the hotel."
 }
 ```
+
 
 ```
 {

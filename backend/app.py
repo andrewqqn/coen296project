@@ -150,22 +150,6 @@ print(f"Firebase Project: {os.getenv('FIREBASE_PROJECT_ID')}")
 print(f"Using Emulator: {os.getenv('USE_FIRESTORE_EMULATOR', 'false')}")
 print("=" * 60)
 
-from infrastructure.chroma_client import init_chroma_policy_client
-
-print("Initializing Chroma vector database...")
-try:
-    chroma_client = init_chroma_policy_client()
-    collection = chroma_client.get_or_create_collection()
-    
-    # Only load embeddings if collection is empty (defer model download)
-    if collection.count() == 0:
-        print("No Chroma data found → will load policy PDF on first query")
-    else:
-        print(f"✓ Chroma loaded with {collection.count()} chunks")
-except Exception as e:
-    print(f"⚠ Chroma initialization warning: {e}")
-    print("  → Chroma will be initialized on first use")
-
 # Initialize multi-agent system
 print("Initializing multi-agent system...")
 from services.agents import expense_agent_service, document_agent_service, orchestrator_agent, email_agent_service
