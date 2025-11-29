@@ -126,6 +126,14 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
+print("=" * 60)
+print("🚀 Starting Expensense Backend")
+print(f"Environment: {os.getenv('ENVIRONMENT', 'development')}")
+print(f"Port: {os.getenv('PORT', '8000')}")
+print(f"Firebase Project: {os.getenv('FIREBASE_PROJECT_ID')}")
+print(f"Using Emulator: {os.getenv('USE_FIRESTORE_EMULATOR', 'false')}")
+print("=" * 60)
+
 # Initialize multi-agent system
 print("Initializing multi-agent system...")
 from services.agents import expense_agent_service, document_agent_service, orchestrator_agent, email_agent_service
