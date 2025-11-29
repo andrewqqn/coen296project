@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from services import financial_service
 from typing import Optional
 from utils.auth import get_current_user
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 router = APIRouter(prefix="/bank-accounts", tags=["Bank Account"])
 
@@ -30,7 +31,7 @@ def get_my_bank_account(current_user: dict = Depends(get_current_user)):
     
     # Otherwise, try to find by employee_id (for backwards compatibility)
     db = get_firestore_client()
-    accounts = db.collection("bank_accounts").where("employee_id", "==", employee_id).limit(1).stream()
+    accounts = db.collection("bank_accounts").where(filter=FieldFilter("employee_id", "==", employee_id)).limit(1).stream()
     
     for doc in accounts:
         account_data = doc.to_dict()

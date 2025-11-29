@@ -306,7 +306,7 @@ async def evaluate_and_maybe_auto_approve(expense_id: str):
 
     try:
         planner_response = await client.responses.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             input=planner_inputs
         )
         plan_raw = planner_response.output_text
@@ -336,6 +336,7 @@ async def evaluate_and_maybe_auto_approve(expense_id: str):
     # Employee Profile
     if need_profile:
         try:
+            from services.employee_service import get_employee
             tools_results["employee_profile"] = to_json_safe(
                 get_employee(expense["employee_id"])
             )
@@ -581,7 +582,6 @@ EXAMPLE VALID OUTPUT for APPROVE (DO NOT COPY LITERALLY):
     image_b64 = None
     if isinstance(base64_img_list, list) and base64_img_list:
         image_b64 = base64_img_list[0]
-        save_base64_to_jpeg(image_b64, "page1.jpg")
     elif isinstance(base64_img_list, str):
         image_b64 = base64_img_list
 
@@ -596,7 +596,7 @@ EXAMPLE VALID OUTPUT for APPROVE (DO NOT COPY LITERALLY):
     # -------- Call the LLM --------
     try:
         final_response = await client.responses.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             input=llm_inputs
         )
 
@@ -859,7 +859,7 @@ class ExpenseAgent(BaseAgent):
                 )
             ],
             metadata={
-                "model": "gpt-4o-mini",
+                "model": "gpt-4o",
                 "supports_vision": True,
                 "max_amount": 500,
                 "policy_rules": ["R1", "R2", "R3", "R4"]
