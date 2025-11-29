@@ -41,4 +41,23 @@ def download_receipt(file_path: str):
 
 
 def generate_receipt_url(file_path: str, expire_seconds: int = 3600):
+    """
+    Generate a URL for viewing/downloading a receipt.
+    Handles both Firebase Storage paths and local:// paths.
+    """
+    import os
+    
+    # Handle local:// paths (from orchestrator file uploads)
+    if file_path.startswith("local://"):
+        # For local files, we need to serve them through the backend
+        # Return a backend endpoint URL instead of trying to generate a signed URL
+        local_path = file_path.replace("local://", "")
+        # URL encode the path
+        import urllib.parse
+        encoded_path = urllib.parse.quote(local_path, safe='')
+        # Return backend URL that will serve the file
+        backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+        return f"{backend_url}/documents/local/{encoded_path}"
+    
+    # Otherwise use Firebase Storage signed URL
     return generate_document_url(file_path, expire_seconds)
