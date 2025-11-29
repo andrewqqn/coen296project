@@ -10,13 +10,9 @@ Add and run your own Red Team tests and gather evidence.
 - Review and extend Red-Team tests in main.py
 
 # Cloud Run Expense Back
-```
-pip freeze > requirements.txt
-```
 
 ```
-gcloud builds submit --tag gcr.io/expensense-8110a/expense-back
-```
+gcloud builds submit --tag us-central1-docker.pkg.dev/expensense-8110a/expense-back:latest```
 
 ```
 gcloud run deploy expense-back \
