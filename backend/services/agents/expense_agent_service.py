@@ -3,13 +3,13 @@ import base64
 import logging
 from io import BytesIO
 from datetime import datetime, timezone
-from typing import Optional, Literal, List, Any, cast
+from typing import Optional, Literal, List, Any, Dict, cast
 
 from pdf2image import convert_from_bytes
 from dateutil import parser
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from langchain_core.output_parsers import JsonOutputParser
-from openai import OpenAI
+from openai import AsyncOpenAI
 from google.cloud.firestore_v1._helpers import DatetimeWithNanoseconds
 
 import domain.repositories.expense_repo as expense_repo
@@ -17,13 +17,21 @@ from services.document_service import download_receipt
 from services.vector_db_service import query_vector_db
 from services.audit_log_service import create_log
 from services.employee_service import get_employee
+from services.agents.base_agent import BaseAgent
+from services.agents.a2a_protocol import (
+    AgentCard,
+    AgentCapability,
+    A2ARequest,
+    A2AResponse
+)
+
 # ============================================================
 # Logger
 # ============================================================
 logger = logging.getLogger("expense_agent")
 logger.setLevel(logging.INFO)
 
-client = OpenAI()
+client = AsyncOpenAI()
 
 
 # ============================================================
@@ -161,7 +169,7 @@ def apply_static_rules(expense, receipt_summary):
 # AI Review Logic
 # ============================================================
 
-def evaluate_and_maybe_auto_approve(expense_id: str):
+async def evaluate_and_maybe_auto_approve(expense_id: str):
     logger.info(f"[AI] Reviewing expense_id={expense_id}")
 
     # -------- Load expense ----------
@@ -297,7 +305,7 @@ def evaluate_and_maybe_auto_approve(expense_id: str):
     ]
 
     try:
-        planner_response = client.responses.create(
+        planner_response = await client.responses.create(
             model="gpt-4o-mini",
             input=planner_inputs
         )
@@ -587,7 +595,7 @@ EXAMPLE VALID OUTPUT for APPROVE (DO NOT COPY LITERALLY):
 
     # -------- Call the LLM --------
     try:
-        final_response = client.responses.create(
+        final_response = await client.responses.create(
             model="gpt-4o-mini",
             input=llm_inputs
         )
@@ -612,23 +620,124 @@ EXAMPLE VALID OUTPUT for APPROVE (DO NOT COPY LITERALLY):
     status_map = {
         "APPROVE": "approved",
         "REJECT": "rejected",
-        "MANUAL": "admin-review"
+        "MANUAL": "admin_review"
     }
     status = status_map[parsed.decision]
 
+    # Get old status before update
+    old_status = expense.get("status", "pending")
+    
     expense_repo.update(expense_id, {
         "status": status,
         "decision_actor": "AI",
         "decision_reason": f"{parsed.rule}: {parsed.reason}",
     })
 
-    # Audit Log
-    create_log({
-        "actor": "AI",
-        "expense_id": expense_id,
-        "log": f"{parsed.decision}, rule={parsed.rule}, reason={parsed.reason}",
-    })
+    # Audit Log - status change
+    from services.audit_log_service import log_expense_status_change
+    log_expense_status_change(
+        actor="AI",
+        expense_id=expense_id,
+        old_status=old_status,
+        new_status=status,
+        reason=f"{parsed.rule}: {parsed.reason}"
+    )
     logger.info(f"[AI] Decision: {parsed.decision}, rule={parsed.rule}, reason={parsed.reason}")
+    
+    # ============================================================
+    # Send Email Notification
+    # ============================================================
+    try:
+        from services.employee_service import get_employee
+        from services.agents.email_agent_service import email_agent
+        from services.agents.a2a_protocol import A2ARequest, create_a2a_message
+        
+        # Get employee email
+        emp_id = expense.get('employee_id')
+        employee_data = get_employee(emp_id)
+        
+        if employee_data and employee_data.get('email'):
+            employee_email = employee_data['email']
+            
+            # Create email notification request
+            email_request = A2ARequest(
+                capability_name="send_expense_notification",
+                parameters={
+                    "to": employee_email,
+                    "expense_id": expense_id,
+                    "status": status,
+                    "amount": float(expense.get('amount', 0)),
+                    "category": expense.get('category', 'N/A'),
+                    "decision_reason": f"{parsed.rule}: {parsed.reason}"
+                },
+                context={"user_id": "system", "role": "system"}
+            )
+            
+            # Send via A2A protocol
+            message = create_a2a_message(
+                sender_id="expense_agent",
+                recipient_id="email_agent",
+                message_type="request",
+                payload=email_request.dict(),
+                capability_name="send_expense_notification"
+            )
+            
+            # Send email notification (await since we're in async context)
+            response = await email_agent.process_message(
+                message, 
+                context={"user_id": "system", "role": "system"}
+            )
+            
+            if response.message_type == "response":
+                logger.info(f"[EMAIL] Notification sent successfully to {employee_email} for expense {expense_id}")
+            else:
+                logger.warning(f"[EMAIL] Notification failed: {response.payload.get('error')}")
+        else:
+            logger.warning(f"[EMAIL] Could not send notification - employee {emp_id} has no email")
+            
+    except Exception as e:
+        # Don't fail the expense review if email fails
+        logger.error(f"[EMAIL] Failed to send notification: {str(e)}", exc_info=True)
+    
+    # ============================================================
+    # Update Bank Account Balance if Approved
+    # ============================================================
+    if status == "approved":
+        try:
+            from services import financial_service
+            from services.audit_log_service import log_payment_event
+            
+            # Get employee to find their bank account
+            emp_id = expense.get('employee_id')
+            employee_data = get_employee(emp_id)
+            
+            if employee_data and employee_data.get('bank_account_id'):
+                bank_account_id = employee_data['bank_account_id']
+                expense_amount = float(expense.get('amount', 0))
+                
+                # Get current balance
+                current_balance = financial_service.get_account_balance(bank_account_id)
+                if current_balance is not None:
+                    # Add expense amount to balance
+                    new_balance = current_balance + expense_amount
+                    financial_service.update_account_balance(bank_account_id, new_balance)
+                    logger.info(f"[PAYMENT] Updated bank account {bank_account_id} balance: ${current_balance} -> ${new_balance} for expense {expense_id}")
+                    
+                    # Log payment event
+                    log_payment_event(
+                        expense_id=expense_id,
+                        employee_id=emp_id,
+                        amount=expense_amount,
+                        bank_account_id=bank_account_id,
+                        old_balance=current_balance,
+                        new_balance=new_balance
+                    )
+                else:
+                    logger.warning(f"[PAYMENT] Could not retrieve balance for bank account {bank_account_id}")
+            else:
+                logger.warning(f"[PAYMENT] Employee {emp_id} does not have a bank_account_id")
+        except Exception as e:
+            logger.error(f"[PAYMENT] Failed to update bank account balance: {str(e)}", exc_info=True)
 
     return parsed
 
@@ -637,10 +746,180 @@ EXAMPLE VALID OUTPUT for APPROVE (DO NOT COPY LITERALLY):
 # Hook
 # ============================================================
 def auto_review_on_create(expense_id: str):
+    """
+    Synchronous wrapper that schedules async review in background.
+    This is called from synchronous code paths.
+    """
+    import asyncio
     try:
-        evaluate_and_maybe_auto_approve(expense_id)
+        # Try to get the current event loop
+        try:
+            loop = asyncio.get_running_loop()
+            # If we're already in an async context, create a task
+            loop.create_task(evaluate_and_maybe_auto_approve(expense_id))
+        except RuntimeError:
+            # No event loop running, create a new one
+            asyncio.run(evaluate_and_maybe_auto_approve(expense_id))
     except Exception as e:
-        logger.error(f"[AUTO_REVIEW_ERROR] {e}")
+        logger.error(f"[AUTO_REVIEW_ERROR] {e}", exc_info=True)
 
 if __name__ == "__main__":
-    evaluate_and_maybe_auto_approve("8fN76XaPhspd7KeaTum2")
+    import asyncio
+    asyncio.run(evaluate_and_maybe_auto_approve("8fN76XaPhspd7KeaTum2"))
+
+# ============================================================
+# A2A Agent Implementation
+# ============================================================
+class ExpenseAgent(BaseAgent):
+    """
+    Expense Agent - Handles expense review and approval using AI
+    """
+    
+    def __init__(self):
+        super().__init__(
+            agent_id="expense_agent",
+            name="Expense Review Agent",
+            description="AI-powered expense review and approval agent that validates receipts and applies policy rules"
+        )
+    
+    def get_agent_card(self) -> AgentCard:
+        """Return the agent's capability card"""
+        return AgentCard(
+            agent_id=self.agent_id,
+            name=self.name,
+            description=self.description,
+            version="1.0.0",
+            capabilities=[
+                AgentCapability(
+                    name="review_expense",
+                    description="Review an expense submission with AI-powered receipt analysis and policy validation",
+                    input_schema={
+                        "type": "object",
+                        "properties": {
+                            "expense_id": {
+                                "type": "string",
+                                "description": "The ID of the expense to review"
+                            }
+                        },
+                        "required": ["expense_id"]
+                    },
+                    output_schema={
+                        "type": "object",
+                        "properties": {
+                            "decision": {
+                                "type": "string",
+                                "enum": ["APPROVE", "REJECT", "MANUAL"],
+                                "description": "The review decision"
+                            },
+                            "rule": {
+                                "type": "string",
+                                "description": "The rule that was applied"
+                            },
+                            "reason": {
+                                "type": "string",
+                                "description": "Explanation for the decision"
+                            },
+                            "confidence": {
+                                "type": "number",
+                                "description": "Confidence score (0-1)"
+                            },
+                            "merchant_name": {"type": "string"},
+                            "date_of_expense": {"type": "string"},
+                            "total_amount": {"type": "string"},
+                            "subtotal": {"type": "string"},
+                            "tax": {"type": "string"},
+                            "payment_method": {"type": "string"}
+                        }
+                    }
+                ),
+                AgentCapability(
+                    name="apply_static_rules",
+                    description="Apply static policy rules to an expense (R1-R4)",
+                    input_schema={
+                        "type": "object",
+                        "properties": {
+                            "expense": {
+                                "type": "object",
+                                "description": "The expense data"
+                            },
+                            "receipt_summary": {
+                                "type": "string",
+                                "description": "Summary of receipt status"
+                            }
+                        },
+                        "required": ["expense", "receipt_summary"]
+                    },
+                    output_schema={
+                        "type": "object",
+                        "properties": {
+                            "rule": {"type": "string"},
+                            "decision": {"type": "string"}
+                        }
+                    }
+                )
+            ],
+            metadata={
+                "model": "gpt-4o-mini",
+                "supports_vision": True,
+                "max_amount": 500,
+                "policy_rules": ["R1", "R2", "R3", "R4"]
+            }
+        )
+    
+    async def handle_request(self, request: A2ARequest, context: Dict[str, Any]) -> A2AResponse:
+        """Handle incoming A2A requests"""
+        try:
+            capability = request.capability_name
+            params = request.parameters
+            
+            if capability == "review_expense":
+                expense_id = params.get("expense_id")
+                if not expense_id:
+                    return A2AResponse(
+                        success=False,
+                        error="Missing required parameter: expense_id"
+                    )
+                
+                # Run the expense review
+                result = await evaluate_and_maybe_auto_approve(expense_id)
+                
+                return A2AResponse(
+                    success=True,
+                    result=result.dict(),
+                    metadata={"expense_id": expense_id}
+                )
+            
+            elif capability == "apply_static_rules":
+                expense = params.get("expense")
+                receipt_summary = params.get("receipt_summary")
+                
+                if not expense or not receipt_summary:
+                    return A2AResponse(
+                        success=False,
+                        error="Missing required parameters: expense and receipt_summary"
+                    )
+                
+                rule, decision = apply_static_rules(expense, receipt_summary)
+                
+                return A2AResponse(
+                    success=True,
+                    result={"rule": rule, "decision": decision}
+                )
+            
+            else:
+                return A2AResponse(
+                    success=False,
+                    error=f"Unknown capability: {capability}"
+                )
+                
+        except Exception as e:
+            logger.error(f"Error handling request in ExpenseAgent: {str(e)}", exc_info=True)
+            return A2AResponse(
+                success=False,
+                error=str(e)
+            )
+
+
+# Create and register the expense agent
+expense_agent = ExpenseAgent()
+expense_agent.register()
