@@ -36,3 +36,27 @@ def delete_document(path: str):
     """
     document_service.delete_document(path)
     return {"success": True, "path": path}
+
+
+@router.get("/local/{file_path:path}")
+def serve_local_file(file_path: str):
+    """
+    Serve a local file (for development/emulator mode).
+    This endpoint handles files stored locally with local:// prefix.
+    """
+    from fastapi.responses import FileResponse
+    import os
+    
+    # Construct full path
+    full_path = os.path.join(os.getcwd(), file_path)
+    
+    # Security check: ensure the file is within the expected directory
+    if not os.path.exists(full_path):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Determine media type based on file extension
+    import mimetypes
+    media_type = mimetypes.guess_type(full_path)[0] or "application/octet-stream"
+    
+    return FileResponse(full_path, media_type=media_type)

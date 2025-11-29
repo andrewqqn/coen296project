@@ -1,31 +1,67 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+/**
+ * Multi-Agent Query Component
+ * 
+ * This component uses the new multi-agent system endpoints:
+ * - POST /agents/query - For text queries
+ * - POST /agents/query-with-files - For queries with file uploads
+ * 
+ * The backend coordinates between specialized agents:
+ * - Expense Agent: Reviews expenses and applies policy rules
+ * - Document Agent: Processes PDFs and extracts information
+ * - Orchestrator Agent: Coordinates between agents
+ */
+
+import React, { useState, useRef, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2, Send, Trash2, Paperclip, X } from "lucide-react";
+import { Loader2, Send, Trash2, Paperclip, X, MessageSquare } from "lucide-react";
 import { getAuthToken } from "@/lib/firebase";
+import { JSX } from "react/jsx-runtime";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
 }
 
-interface OrchestratorResponse {
+interface AgentQueryResponse {
   success: boolean;
   response: string | null;
-  tools_used: string[];
+  agents_used: string[];
   query: string;
   error: string | null;
 }
 
-export function OrchestratorQuery() {
-  const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
+interface OrchestratorQueryProps {
+  conversationHistory: Message[];
+  setConversationHistory: React.Dispatch<React.SetStateAction<Message[]>>;
+  isLoading: boolean;
+  setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  queryText: string;
+  setQueryText: React.Dispatch<React.SetStateAction<string>>;
+}
+
+export function OrchestratorQuery({ 
+  conversationHistory, 
+  setConversationHistory,
+  isLoading,
+  setIsLoading,
+  queryText,
+  setQueryText
+}: OrchestratorQueryProps) {
   const [error, setError] = useState<string | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [lastAgentsUsed, setLastAgentsUsed] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when conversation history changes
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [conversationHistory]);
 
   // Function to format markdown text
   const formatMarkdown = (text: string) => {
@@ -33,14 +69,12 @@ export function OrchestratorQuery() {
     const elements: JSX.Element[] = [];
     let inCodeBlock = false;
     let codeBlockContent: string[] = [];
-    let codeBlockLang = '';
 
     lines.forEach((line, lineIndex) => {
       // Handle code blocks
       if (line.startsWith('```')) {
         if (!inCodeBlock) {
           inCodeBlock = true;
-          codeBlockLang = line.slice(3).trim();
           codeBlockContent = [];
         } else {
           inCodeBlock = false;
@@ -50,7 +84,6 @@ export function OrchestratorQuery() {
             </pre>
           );
           codeBlockContent = [];
-          codeBlockLang = '';
         }
         return;
       }
@@ -232,14 +265,24 @@ export function OrchestratorQuery() {
   };
 
   const handleSubmit = async () => {
-    if (!query.trim()) return;
+    if (!queryText.trim()) return;
 
-    setLoading(true);
-    setError(null);
-    
     // Store the current query before clearing
-    const currentQuery = query.trim();
+    const currentQuery = queryText.trim();
     const currentFiles = [...attachedFiles];
+
+    // Add user message to conversation history immediately for better UX
+    setConversationHistory(prev => [
+      ...prev,
+      { role: "user", content: currentQuery }
+    ]);
+
+    // Clear the input and files immediately
+    setQueryText("");
+    setAttachedFiles([]);
+
+    setIsLoading(true);
+    setError(null);
 
     try {
       // Get backend URL from environment
@@ -254,7 +297,7 @@ export function OrchestratorQuery() {
         const formData = new FormData();
         formData.append("query", currentQuery);
         
-        // Add message history if it exists
+        // Add message history if it exists (excluding the just-added user message)
         if (conversationHistory.length > 0) {
           formData.append("message_history", JSON.stringify(conversationHistory));
         }
@@ -264,7 +307,8 @@ export function OrchestratorQuery() {
           formData.append("files", file);
         });
 
-        response = await fetch(`${backendUrl}/orchestrator/`, {
+        // Use new multi-agent endpoint for file uploads
+        response = await fetch(`${backendUrl}/agents/query-with-files`, {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${token}`,
@@ -273,7 +317,8 @@ export function OrchestratorQuery() {
           body: formData,
         });
       } else {
-        response = await fetch(`${backendUrl}/orchestrator/`, {
+        // Use new multi-agent endpoint for regular queries
+        response = await fetch(`${backendUrl}/agents/query`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -291,21 +336,19 @@ export function OrchestratorQuery() {
         throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
       }
 
-      const data: OrchestratorResponse = await response.json();
+      const data: AgentQueryResponse = await response.json();
       
-      // Add user message and assistant response to conversation history
+      // Add assistant response to conversation history
       if (data.success && data.response) {
         setConversationHistory(prev => [
           ...prev,
-          { role: "user", content: currentQuery },
           { role: "assistant", content: data.response as string }
         ]);
-      }
-      
-      // Clear the input and files on success
-      if (data.success) {
-        setQuery("");
-        setAttachedFiles([]);
+        
+        // Store which agents were used for display
+        if (data.agents_used && data.agents_used.length > 0) {
+          setLastAgentsUsed(data.agents_used);
+        }
       } else {
         setError(data.error || "Unknown error occurred");
       }
@@ -314,7 +357,7 @@ export function OrchestratorQuery() {
       setError(errorMessage);
       console.error("Orchestrator error:", err);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
   
@@ -322,63 +365,108 @@ export function OrchestratorQuery() {
     setConversationHistory([]);
     setAttachedFiles([]);
     setError(null);
+    setLastAgentsUsed([]);
+  };
+
+  // Helper to format agent names for display
+  const formatAgentName = (agentId: string): string => {
+    const agentNames: Record<string, string> = {
+      'expense_agent': 'Expense Agent',
+      'document_agent': 'Document Agent',
+      'orchestrator': 'Orchestrator'
+    };
+    return agentNames[agentId] || agentId;
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !loading) {
+    if (e.key === "Enter" && !isLoading) {
       handleSubmit();
     }
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto space-y-4">
-      {/* Conversation History */}
-      {conversationHistory.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-muted-foreground">
-              Conversation ({conversationHistory.length / 2} messages)
-            </p>
-            <Button
-              onClick={clearConversation}
-              variant="ghost"
-              size="sm"
-              className="h-8 gap-2"
-            >
-              <Trash2 className="h-3 w-3" />
-              Clear
-            </Button>
-          </div>
-          
-          <div className="max-h-96 overflow-y-auto space-y-3 p-4 rounded-lg border bg-muted/30">
-            {conversationHistory.map((message, index) => (
-              <div
+    <div className="flex flex-col h-full max-w-4xl mx-auto">
+      {/* Agents Used Indicator */}
+      {lastAgentsUsed.length > 0 && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20 mb-4">
+          <span className="text-xs font-semibold text-muted-foreground">
+            Agents Used:
+          </span>
+          <div className="flex gap-2">
+            {lastAgentsUsed.map((agentId, index) => (
+              <span
                 key={index}
-                className={`p-3 rounded-lg ${
-                  message.role === "user"
-                    ? "bg-primary/10 border border-primary/20 ml-8"
-                    : "bg-card border mr-8"
-                }`}
+                className="px-2 py-1 text-xs font-medium bg-primary/10 text-primary rounded-md border border-primary/30"
               >
-                <p className="text-xs font-semibold mb-1 text-muted-foreground">
-                  {message.role === "user" ? "You" : "Assistant"}
-                </p>
-                <div className="text-sm">
-                  {message.role === "assistant" 
-                    ? formatMarkdown(message.content)
-                    : message.content
-                  }
-                </div>
-              </div>
+                {formatAgentName(agentId)}
+              </span>
             ))}
           </div>
         </div>
       )}
 
+      {/* Conversation History - takes up remaining space */}
+      <div className="flex-1 flex flex-col min-h-0 mb-4">
+        {conversationHistory.length > 0 ? (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-semibold text-muted-foreground">
+                Conversation ({Math.floor(conversationHistory.length / 2)} messages)
+              </p>
+              <Button
+                onClick={clearConversation}
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-2"
+              >
+                <Trash2 className="h-3 w-3" />
+                Clear
+              </Button>
+            </div>
+            
+            <div 
+              ref={chatContainerRef}
+              className="flex-1 overflow-y-auto space-y-3 p-4 rounded-lg border bg-muted/30"
+            >
+              {conversationHistory.map((message, index) => (
+                <div
+                  key={index}
+                  className={`p-3 rounded-lg ${
+                    message.role === "user"
+                      ? "bg-primary/10 border border-primary/20 ml-8"
+                      : "bg-card border mr-8"
+                  }`}
+                >
+                  <p className="text-xs font-semibold mb-1 text-muted-foreground">
+                    {message.role === "user" ? "You" : "Assistant"}
+                  </p>
+                  <div className="text-sm">
+                    {message.role === "assistant" 
+                      ? formatMarkdown(message.content)
+                      : message.content
+                    }
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center rounded-lg border border-dashed bg-muted/30">
+            <div className="text-center p-8">
+              <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+              <p className="text-lg font-medium text-muted-foreground mb-2">No messages yet</p>
+              <p className="text-sm text-muted-foreground">
+                Start a conversation by typing a query below
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Attached Files Display */}
       {attachedFiles.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-sm font-semibold text-muted-foreground">
+        <div className="mb-4">
+          <p className="text-sm font-semibold text-muted-foreground mb-2">
             Attached PDFs ({attachedFiles.length})
           </p>
           <div className="flex flex-wrap gap-2">
@@ -405,7 +493,15 @@ export function OrchestratorQuery() {
         </div>
       )}
 
-      {/* Input Section */}
+      {/* Error Display */}
+      {error && (
+        <div className="p-4 rounded-lg bg-destructive/10 border border-destructive text-destructive mb-4">
+          <p className="font-semibold">Error</p>
+          <p className="text-sm">{error}</p>
+        </div>
+      )}
+
+      {/* Input Section - fixed at bottom */}
       <div className="flex gap-2">
         <input
           ref={fileInputRef}
@@ -419,7 +515,7 @@ export function OrchestratorQuery() {
           onClick={() => fileInputRef.current?.click()}
           variant="outline"
           size="icon"
-          disabled={loading}
+          disabled={isLoading}
           title="Attach PDF documents"
         >
           <Paperclip className="h-4 w-4" />
@@ -427,31 +523,24 @@ export function OrchestratorQuery() {
         <Input
           type="text"
           placeholder="Ask me anything... (e.g., 'List all employees' or 'Show me all expenses')"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          value={queryText}
+          onChange={(e) => setQueryText(e.target.value)}
           onKeyDown={handleKeyDown}
-          disabled={loading}
+          disabled={isLoading}
           className="flex-1"
         />
         <Button
           onClick={handleSubmit}
-          disabled={loading || !query.trim()}
+          disabled={isLoading || !queryText.trim()}
           size="icon"
         >
-          {loading ? (
+          {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Send className="h-4 w-4" />
           )}
         </Button>
       </div>
-
-      {error && (
-        <div className="p-4 rounded-lg bg-destructive/10 border border-destructive text-destructive">
-          <p className="font-semibold">Error</p>
-          <p className="text-sm">{error}</p>
-        </div>
-      )}
     </div>
   );
 }

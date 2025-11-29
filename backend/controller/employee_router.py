@@ -1,9 +1,18 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from services import employee_service
 from domain.schemas.employee_schema import EmployeeCreate, EmployeeUpdate, EmployeeOut
 from typing import List
+from utils.auth import get_current_user
 
 router = APIRouter(prefix="/employees", tags=["Employee"])
+
+@router.get("/me", response_model=EmployeeOut)
+def get_current_employee(current_user: dict = Depends(get_current_user)):
+    """Get the current authenticated user's employee profile"""
+    emp = employee_service.get_employee_by_auth_id(current_user["uid"])
+    if emp is None:
+        raise HTTPException(status_code=404, detail="Employee profile not found")
+    return emp
 
 @router.get("", response_model=List[EmployeeOut])
 def list_employee():

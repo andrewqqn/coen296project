@@ -6,7 +6,7 @@ info:
     API definitions generated from current Pydantic schemas and routers.
     Request and response bodies strictly match the Python schema definitions used by the FastAPI routers.
 servers:
-  - url: https://localhost:8081/api/v1
+  - url: http://localhost:8000
     description: Local test server
 
 security:
@@ -69,7 +69,7 @@ components:
         business_justification: { type: string }
         category: { type: string, enum: ["Travel", "Meals", "Conference", "Other"], default: "Other" }
 
-        status: { type: string, enum: ["pending", "approved", "rejected", "admin-review"], default: "pending" }
+        status: { type: string, enum: ["pending", "approved", "rejected", "admin_review"], default: "pending" }
         decision_actor: { type: string, nullable: true }
         decision_reason: { type: string, nullable: true }
 
