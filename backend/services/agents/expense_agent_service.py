@@ -306,7 +306,7 @@ async def evaluate_and_maybe_auto_approve(expense_id: str):
 
     try:
         planner_response = await client.responses.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             input=planner_inputs
         )
         plan_raw = planner_response.output_text
@@ -596,7 +596,7 @@ EXAMPLE VALID OUTPUT for APPROVE (DO NOT COPY LITERALLY):
     # -------- Call the LLM --------
     try:
         final_response = await client.responses.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             input=llm_inputs
         )
 
@@ -859,7 +859,7 @@ class ExpenseAgent(BaseAgent):
                 )
             ],
             metadata={
-                "model": "gpt-4o-mini",
+                "model": "gpt-4o",
                 "supports_vision": True,
                 "max_amount": 500,
                 "policy_rules": ["R1", "R2", "R3", "R4"]
