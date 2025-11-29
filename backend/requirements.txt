@@ -13,9 +13,7 @@ googleapis-common-protos==1.72.0
 firebase-admin==6.6.0
 
 langchain==1.0.7
-langgraph==1.0.3
 pydantic
-pydantic-ai==1.22.0
 pydantic-ai-slim==1.22.0
 openai==2.8.1
 
