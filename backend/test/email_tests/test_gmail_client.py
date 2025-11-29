@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from email_agent.gmail.gmail_client import GmailClient
+from backend.services.agents.email_agent.gmail.gmail_client import GmailClient
 from googleapiclient.errors import HttpError
 
 

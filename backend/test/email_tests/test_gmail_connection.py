@@ -1,5 +1,5 @@
 import os
-from email_agent.gmail.gmail_service_creator import GmailServiceCreator
+from backend.services.agents.email_agent.gmail.gmail_service_creator import GmailServiceCreator
 
 # Uses fake files
 def test_fake_gmail_connection(tmp_path):
@@ -26,8 +26,8 @@ def test_real_gmail_connection():
     - The correct scopes are enabled
     """
 
-    credentials_path = "email_agent/gmail_oauth_credentials.json"
-    token_path = "email_agent/gmail_token.json"
+    credentials_path = "/coen296project/backend/services/agents/email_agent/gmail_oauth_credentials.json"
+    token_path = "/coen296/coen296project/backend/services/agents/email_agent/gmail_token.json"
 
     # Ensure credential files exist before running real API calls
     assert os.path.exists(credentials_path), f"Missing credentials: {credentials_path}"

@@ -1,6 +1,6 @@
 from email.mime.text import MIMEText
 import base64
-from email_agent.services.email_parser import EmailParser
+from backend.services.agents.email_agent.services.email_parser import EmailParser
 
 
 def test_parse_mime_message():
