@@ -1,47 +1,42 @@
-# Use multi-stage build for smaller final image
-FROM python:3.12-slim as builder
+# Stage 1: Builder
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Install build dependencies
+# Install system dependencies needed to compile some Python packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install to a virtual environment
-COPY requirements.clean.txt requirements.txt
+# Install Python dependencies
+COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Pre-download the sentence-transformers model to avoid runtime downloads
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-mpnet-base-v2')"
 
-# Final stage
-FROM python:3.12-slim
+# Stage 2: Final lightweight image
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install only runtime dependencies
+# Install runtime-only system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Python packages and cached models from builder
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+# Copy installed packages
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
-COPY --from=builder /root/.cache /root/.cache
 
-# Copy application code (this layer changes most frequently, so it's last)
+# Copy your application code
 COPY . .
 
-# Create logs directory
 RUN mkdir -p logs
 
-# Cloud Run expects port 8080
 ENV PORT=8080
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Use exec form for proper signal handling
-CMD exec uvicorn app:app --host 0.0.0.0 --port ${PORT} --workers 1
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]
