@@ -1,7 +1,7 @@
 import pytest, requests, json
 import base64
 
-BASE_URL = "http://localhost:8081"
+BASE_URL = "http://localhost:8000"
 FIREBASE_EMULATOR_URL = (
     "http://localhost:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key"
 )

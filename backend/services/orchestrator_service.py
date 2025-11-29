@@ -1,5 +1,18 @@
 """
-Orchestrator service using Pydantic AI to route natural language queries to appropriate tools.
+DEPRECATED: Legacy Orchestrator Service
+
+This file is deprecated and no longer used. The system now uses the multi-agent
+architecture in services/multi_agent_orchestrator.py and services/agents/.
+
+The /orchestrator endpoint has been updated to use the new system while maintaining
+backward compatibility.
+
+For new development, use:
+- services/multi_agent_orchestrator.py
+- services/agents/orchestrator_agent.py
+- controller/agents_router.py
+
+This file is kept for reference only.
 """
 from typing import Any, Dict, List, Optional, Literal
 from pydantic import BaseModel
@@ -280,7 +293,7 @@ def register_expense_tools(agent: Agent, role: Literal["employee", "admin"]):
                 decision_actor = updated_expense.get('decision_actor')
                 
                 # Check if AI has made a decision
-                if decision_actor == 'AI' and status in ['approved', 'rejected', 'admin-review']:
+                if decision_actor == 'AI' and status in ['approved', 'rejected', 'admin_review']:
                     logger.info(f"AI review completed with status: {status}")
                     
                     # Add review result to the response
@@ -684,7 +697,7 @@ async def process_query(
                     response_text += f"\n\n✅ **Expense Approved!**\nYour expense of ${amount} has been automatically approved by our AI system."
                 elif status == 'rejected':
                     response_text += f"\n\n❌ **Expense Rejected**\nYour expense of ${amount} was rejected. Reason: {reason}"
-                elif status == 'admin-review':
+                elif status == 'admin_review':
                     response_text += f"\n\n⏳ **Manual Review Required**\nYour expense of ${amount} has been flagged for manual review by an administrator. Reason: {reason}"
             else:
                 response_text += f"\n\n⏳ **Review Pending**\nYour expense has been submitted and is being reviewed. Please check back shortly."

@@ -1,4 +1,6 @@
 from infrastructure.firebase_client import get_firestore_client
+from google.cloud.firestore_v1.base_query import FieldFilter
+
 db = get_firestore_client()
 COLLECTION = "employees"
 
@@ -22,5 +24,12 @@ def update(emp_id: str, data: dict):
 def delete(emp_id: str):
     db.collection(COLLECTION).document(emp_id).delete()
     return {"deleted": True, "employee_id": emp_id}
+
+def get_by_authentication_id(auth_id: str):
+    """Get employee by Firebase authentication ID"""
+    docs = db.collection(COLLECTION).where(filter=FieldFilter("authentication_id", "==", auth_id)).limit(1).stream()
+    for doc in docs:
+        return doc.to_dict() | {"employee_id": doc.id}
+    return None
 
 
