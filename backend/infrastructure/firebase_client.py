@@ -55,7 +55,13 @@ def init_firebase():
                 })
                 print("Firebase initialized with PRODUCTION service account credentials")
             else:
-                raise RuntimeError("Production requires service account JSON.")
+                # Use Application Default Credentials (ADC) for Cloud Run
+                # Cloud Run automatically provides credentials when deployed to the same project
+                print("Using Application Default Credentials for Firebase (Cloud Run)")
+                firebase_admin.initialize_app(options={
+                    "storageBucket": STORAGE_BUCKET or f"{PROJECT_ID}.appspot.com",
+                    "projectId": PROJECT_ID
+                })
 
 def get_firestore_client():
     init_firebase()

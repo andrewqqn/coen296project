@@ -1,0 +1,54 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.env
+.env.*
+*.log
+.pytest_cache
+.coverage
+htmlcov/
+*.md
+.git
+.gitignore
+tests/
+test_*.py
+*.test.py
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+firebase-debug.log
+firestore-debug.log
+emulator-credentials.json
+
+# Exclude runtime data directories
+.chroma_store/
+uploads/
+logs/
+static/
+
+# Exclude deployment and test files
+deploy.sh
+*.sh
+examples/
+test/
+
+# Exclude unnecessary requirements file
+requirements.txt
+
+# Exclude documentation
+README.md
+*.md
+QUICKSTART*.md
+*_GUIDE.md
+*_FLOW.md
+*_INTEGRATION.md
+
+# Exclude Firebase config (use env vars instead)
+firebase.json
