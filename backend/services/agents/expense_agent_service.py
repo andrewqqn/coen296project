@@ -582,7 +582,6 @@ EXAMPLE VALID OUTPUT for APPROVE (DO NOT COPY LITERALLY):
     image_b64 = None
     if isinstance(base64_img_list, list) and base64_img_list:
         image_b64 = base64_img_list[0]
-        save_base64_to_jpeg(image_b64, "page1.jpg")
     elif isinstance(base64_img_list, str):
         image_b64 = base64_img_list
 
