@@ -58,11 +58,11 @@ Then open your browser and check the local emulator UI:
 Open a **new terminal** and run:
 
 ```bash
-uvicorn app:app --host 0.0.0.0 --port 8081 --reload
+uvicorn app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 Then visit:
-👉 [http://0.0.0.0:8081/docs](http://0.0.0.0:8081/docs)
+👉 [http://0.0.0.0:8000/docs](http://0.0.0.0:8000/docs)
 This will open the **Swagger UI** for testing your API.
 
 ---

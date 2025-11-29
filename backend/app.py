@@ -75,9 +75,20 @@ app = FastAPI(
 )
 
 # Configure CORS
+allowed_origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://expensense-8110a.web.app",
+    "https://expensense-8110a.firebaseapp.com",
+]
+
+# Allow any origin in development
+if os.getenv("ENVIRONMENT") != "production":
+    allowed_origins.append("*")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],  # Frontend URLs
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all headers
@@ -96,6 +107,11 @@ app.include_router(agents_router.router)
 @app.get("/")
 def root():
     return {"message": "Expense System (CRUD + Agents) running 🚀"}
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint for Cloud Run"""
+    return {"status": "healthy", "service": "expensense-backend"}
 
 
 # ---------- CUSTOM OPENAPI ----------
@@ -143,5 +159,9 @@ registered_agents = agent_registry.list_agents()
 print(f"✓ Multi-agent system initialized with {len(registered_agents)} agents:")
 for agent in registered_agents:
     print(f"  - {agent.name} ({agent.agent_id}): {len(agent.capabilities)} capabilities")
+
+print("=" * 60)
+print("✅ Backend startup complete - ready to accept requests")
+print("=" * 60)
 
 
