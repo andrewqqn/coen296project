@@ -75,9 +75,20 @@ app = FastAPI(
 )
 
 # Configure CORS
+allowed_origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://expensense-8110a.web.app",
+    "https://expensense-8110a.firebaseapp.com",
+]
+
+# Allow any origin in development
+if os.getenv("ENVIRONMENT") != "production":
+    allowed_origins.append("*")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],  # Frontend URLs
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all headers
@@ -96,6 +107,11 @@ app.include_router(agents_router.router)
 @app.get("/")
 def root():
     return {"message": "Expense System (CRUD + Agents) running 🚀"}
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint for Cloud Run"""
+    return {"status": "healthy", "service": "expensense-backend"}
 
 
 # ---------- CUSTOM OPENAPI ----------
@@ -126,16 +142,13 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
-from infrastructure.chroma_client import init_chroma_policy_client
-
-chroma_client = init_chroma_policy_client()
-
-collection = chroma_client.get_or_create_collection()
-if collection.count() == 0:
-    print("No Chroma data found → loading policy PDF now...")
-    chroma_client.store_policy_pdf()
-else:
-    print(f"Chroma loaded with {collection.count()} chunks")
+print("=" * 60)
+print("🚀 Starting Expensense Backend")
+print(f"Environment: {os.getenv('ENVIRONMENT', 'development')}")
+print(f"Port: {os.getenv('PORT', '8000')}")
+print(f"Firebase Project: {os.getenv('FIREBASE_PROJECT_ID')}")
+print(f"Using Emulator: {os.getenv('USE_FIRESTORE_EMULATOR', 'false')}")
+print("=" * 60)
 
 # Initialize multi-agent system
 print("Initializing multi-agent system...")
@@ -146,5 +159,9 @@ registered_agents = agent_registry.list_agents()
 print(f"✓ Multi-agent system initialized with {len(registered_agents)} agents:")
 for agent in registered_agents:
     print(f"  - {agent.name} ({agent.agent_id}): {len(agent.capabilities)} capabilities")
+
+print("=" * 60)
+print("✅ Backend startup complete - ready to accept requests")
+print("=" * 60)
 
 
