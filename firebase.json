@@ -1,10 +1,24 @@
 {
+  "hosting": {
+    "public": "frontend/out",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
   "emulators": {
     "auth": {
       "port": 9099
     },
     "firestore": {
-      "port": 8080
+      "port": 8081
     },
     "storage": {
       "port": 9199
