@@ -126,16 +126,16 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
-from infrastructure.chroma_client import init_chroma_policy_client
-
-chroma_client = init_chroma_policy_client()
-
-collection = chroma_client.get_or_create_collection()
-if collection.count() == 0:
-    print("No Chroma data found → loading policy PDF now...")
-    chroma_client.store_policy_pdf()
-else:
-    print(f"Chroma loaded with {collection.count()} chunks")
+# from infrastructure.chroma_client import init_chroma_policy_client
+#
+# chroma_client = init_chroma_policy_client()
+#
+# collection = chroma_client.get_or_create_collection()
+# if collection.count() == 0:
+#     print("No Chroma data found → loading policy PDF now...")
+#     chroma_client.store_policy_pdf()
+# else:
+#     print(f"Chroma loaded with {collection.count()} chunks")
 
 # Initialize multi-agent system
 print("Initializing multi-agent system...")
