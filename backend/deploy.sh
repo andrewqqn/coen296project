@@ -33,16 +33,19 @@ if [ -z "$OPENAI_API_KEY" ]; then
     exit 1
 fi
 
-# Deploy
+# Deploy with extended startup timeout
 gcloud run deploy $SERVICE_NAME \
   --source . \
   --platform managed \
   --region $REGION \
   --allow-unauthenticated \
   --project $PROJECT_ID \
-  --memory 1Gi \
-  --cpu 1 \
+  --memory 2Gi \
+  --cpu 2 \
   --timeout 300 \
+  --max-instances 10 \
+  --cpu-boost \
+  --no-cpu-throttling \
   --set-env-vars="FIREBASE_PROJECT_ID=$PROJECT_ID,ENVIRONMENT=production,OPENAI_API_KEY=$OPENAI_API_KEY,FIREBASE_STORAGE_BUCKET=${PROJECT_ID}.appspot.com,USE_FIRESTORE_EMULATOR=false"
 
 echo ""

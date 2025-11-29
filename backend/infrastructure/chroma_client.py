@@ -55,12 +55,9 @@ class ChromaPolicyClient:
         self.chunk_overlap = chunk_overlap
         self.pdf_path = Path(pdf_path) if pdf_path else DEFAULT_PDF_PATH
 
-        # FREE, high-quality semantic embedding model
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-mpnet-base-v2",
-            model_kwargs={"device": "cpu"},  # Cloud Run safe
-            encode_kwargs={"normalize_embeddings": True},
-        )
+        # FREE, high-quality semantic embedding model (lazy loaded)
+        self._embeddings = None
+        self.embedding_model_name = "sentence-transformers/all-mpnet-base-v2"
 
         # Persistent Chroma
         self.client = chromadb.PersistentClient(
@@ -69,6 +66,35 @@ class ChromaPolicyClient:
         )
 
         self.collection = None
+
+    @property
+    def embeddings(self):
+        """Lazy load embeddings model to avoid startup delays"""
+        if self._embeddings is None:
+            import time
+            logger.info(f"Loading embedding model: {self.embedding_model_name}")
+            
+            # Retry logic for HuggingFace rate limits
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    self._embeddings = HuggingFaceEmbeddings(
+                        model_name=self.embedding_model_name,
+                        model_kwargs={"device": "cpu"},
+                        encode_kwargs={"normalize_embeddings": True},
+                    )
+                    logger.info("✓ Embedding model loaded successfully")
+                    break
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        wait_time = (attempt + 1) * 5  # 5s, 10s, 15s
+                        logger.warning(f"Failed to load model (attempt {attempt + 1}/{max_retries}): {e}")
+                        logger.info(f"Retrying in {wait_time} seconds...")
+                        time.sleep(wait_time)
+                    else:
+                        logger.error(f"Failed to load embedding model after {max_retries} attempts: {e}")
+                        raise
+        return self._embeddings
 
     # -------------------------------------------------------
     # Get or create collection (with auto dimension check)
