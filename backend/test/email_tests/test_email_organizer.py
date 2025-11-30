@@ -1,5 +1,5 @@
 from unittest.mock import MagicMock
-from email_agent.services.email_organizer import EmailOrganizer
+from backend.services.agents.email_agent.services.email_organizer import EmailOrganizer
 
 
 def test_apply_filters_move_to_label():
