@@ -528,8 +528,8 @@ async def upload_file_to_storage(file: UploadFile, user_id: str) -> str:
         Public URL of the uploaded file (or local path in emulator mode)
     """
     try:
-        from config import USE_FIRESTORE_EMULATOR, FIREBASE_STORAGE_EMULATOR_HOST
-        
+        from config import USE_FIRESTORE_EMULATOR, PROJECT_ID, STORAGE_BUCKET
+
         # Generate unique filename
         file_extension = os.path.splitext(file.filename)[1] if file.filename else '.pdf'
         unique_filename = f"receipts/{user_id}/{uuid.uuid4()}{file_extension}"
@@ -557,16 +557,23 @@ async def upload_file_to_storage(file: UploadFile, user_id: str) -> str:
             return file_url
         else:
             # Production mode - upload to Firebase Storage
-            bucket = get_storage_bucket()
-            blob = bucket.blob(unique_filename)
-            
+            from infrastructure.firebase_client import get_storage_bucket
+
+            storage_path = f"receipts/{user_id}/{unique_filename}"
+            logger.info(f"Uploading to storage. PROJECT_ID={PROJECT_ID}, STORAGE_BUCKET={STORAGE_BUCKET}")
+            try:
+                bucket = get_storage_bucket()
+                logger.info(f"Got storage bucket: {getattr(bucket, 'name', '<no-name>')}")
+            except Exception as e:
+                logger.exception("Failed to get storage bucket")
+                raise
+            blob = bucket.blob(storage_path)
+
             # Upload to Firebase Storage
             blob.upload_from_string(content, content_type=file.content_type or 'application/pdf')
-            
-            # Make the blob publicly accessible (optional, adjust based on your security requirements)
             blob.make_public()
             
-            logger.info(f"File uploaded to Firebase Storage: {unique_filename}")
+            logger.info(f"File uploaded to Firebase Storage: {storage_path}")
             return blob.public_url
         
     except Exception as e:

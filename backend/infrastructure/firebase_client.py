@@ -39,7 +39,7 @@ def init_firebase():
                 mock_cred_path = os.path.join(os.path.dirname(__file__), "..", "emulator-credentials.json")
                 cred = credentials.Certificate(mock_cred_path)
                 print(f"Firebase Admin SDK initialized in EMULATOR mode with mock credentials (Project: {PROJECT_ID})")
-            
+
             firebase_admin.initialize_app(cred, options={
                 "projectId": PROJECT_ID,
                 "storageBucket": f"{PROJECT_ID}.appspot.com",
@@ -53,7 +53,7 @@ def init_firebase():
                     "storageBucket": STORAGE_BUCKET,
                     "projectId": PROJECT_ID
                 })
-                print("Firebase initialized with PRODUCTION service account credentials")
+                print(f"Firebase initialized with PRODUCTION service account credentials with path of {sa_path}")
             else:
                 # Use Application Default Credentials (ADC) for Cloud Run
                 # Cloud Run automatically provides credentials when deployed to the same project
