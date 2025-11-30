@@ -432,7 +432,7 @@ REIMBURSEMENT POLICY RULES (STRICT)
 ===============================================================================
 
 ----------------------------------------
-1. Receipt Requirements
+1. Mandatory Receipt Requirements
 ----------------------------------------
 A valid receipt MUST clearly show:
 - vendor name 
@@ -446,10 +446,17 @@ If the receipt is missing essential fields, unreadable, corrupted, or contradict
 the form:
 → decision = "REJECT", rule = "R4", confidence ≤ 0.75
 
-OCR consistency checks:
-- OCR amount MUST match submitted amount
-If these cannot be confidently extracted:
-→ decision = "MANUAL", rule = "OCR"
+You must check consistency between OCR-extracted fields and the submitted metadata:
+
+- OCR total amount MUST match submitted total amount  
+- OCR date MUST match submitted date (same day)
+- OCR vendor name MUST logically match submitted merchant
+
+If OCR cannot confidently extract these fields OR values appear ambiguous:
+→ you MUST output:
+
+→ decision = "REJECT", rule = "R4", confidence ≤ 0.75
+
 
 ----------------------------------------
 2. Eligible Categories
