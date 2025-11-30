@@ -6,7 +6,7 @@ info:
     API definitions generated from current Pydantic schemas and routers.
     Request and response bodies strictly match the Python schema definitions used by the FastAPI routers.
 servers:
-  - url: http://localhost:8000
+  - url: https://expense-back-855319526387.us-central1.run.app
     description: Local test server
 
 security:
