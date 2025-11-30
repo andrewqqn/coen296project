@@ -4,9 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.openapi.utils import get_openapi
 
-from dotenv import load_dotenv
-load_dotenv()
-
 from infrastructure.firebase_client import init_firebase
 init_firebase()
 
@@ -16,7 +13,15 @@ from controller import employee_router, expense_router, audit_router, document_r
 from application import orchestrator_router
 
 security = HTTPBearer(auto_error=False)
-USE_AUTH_EMULATOR = os.getenv("USE_FIRESTORE_EMULATOR")
+
+def env_flag(name: str, default: bool = False) -> bool:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return val.strip().lower() in ("1", "true", "yes", "y", "on")
+
+USE_AUTH_EMULATOR = env_flag("USE_FIRESTORE_EMULATOR", default=False)
+
 
 import logging
 from logging.handlers import RotatingFileHandler
@@ -54,6 +59,8 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
 
     # ---------- Emulator Mode ----------
     if USE_AUTH_EMULATOR:
+        logging.info(f"Using Firebase Auth Emulator: {token}")
+        print(f"Using Firebase Auth Emulator: {token}")
         return {
             "uid": f"emu-{token[-8:]}",
             "email": "testuser@emu.local",
@@ -62,6 +69,7 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
 
     # ---------- Production Mode ----------
     try:
+        logging.info(f"Verifying Firebase ID Token: {token}")
         decoded = auth.verify_id_token(token)
         return decoded
     except Exception:
@@ -80,6 +88,7 @@ allowed_origins = [
     "http://localhost:3001",
     "https://expensense-8110a.web.app",
     "https://expensense-8110a.firebaseapp.com",
+    "https://expense-back-855319526387.us-central1.run.app"
 ]
 
 # Allow any origin in development
@@ -106,10 +115,12 @@ app.include_router(agents_router.router)
 
 @app.get("/")
 def root():
+    logging.info("Root endpoint received")
     return {"message": "Expense System (CRUD + Agents) running 🚀"}
 
 @app.get("/health")
 def health_check():
+    logging.info("Health check received")
     """Health check endpoint for Cloud Run"""
     return {"status": "healthy", "service": "expensense-backend"}
 

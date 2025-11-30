@@ -19,3 +19,10 @@ openai==2.8.1
 
 python-dateutil
 pdf2image==1.17.0
+
+python-dotenv
+python-multipart
+pytest
+requests
+google-api-python-client
+google-auth-oauthlib
