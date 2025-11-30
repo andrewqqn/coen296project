@@ -1,20 +1,14 @@
 uvicorn==0.38.0
 fastapi
 
-python-multipart
-
-requests
-python-dotenv
-
 google-api-core==2.28.1
 google-auth==2.43.0
 google-cloud-core==2.5.0
 google-cloud-firestore==2.21.0
-google-api-python-client
-google-cloud-storage
+google-cloud-storage==3.5.0
 google-crc32c==1.7.1
 google-genai==1.52.0
-google-resumable-media
+google-resumable-media==2.7.2
 googleapis-common-protos==1.72.0
 firebase-admin==6.6.0
 
@@ -27,5 +21,8 @@ python-dateutil
 pdf2image==1.17.0
 
 python-dotenv
+python-multipart
 pytest
 requests
+google-api-python-client
+google-auth-oauthlib

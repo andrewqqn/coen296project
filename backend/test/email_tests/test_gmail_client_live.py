@@ -5,19 +5,19 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # Fix imports
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
 
-from email_agent.gmail.gmail_service_creator import GmailServiceCreator
-from email_agent.gmail.gmail_client import GmailClient
+from backend.services.agents.email_agent.gmail.gmail_service_creator import GmailServiceCreator
+from backend.services.agents.email_agent.gmail.gmail_client import GmailClient
 
 """
 Configuration - UPDATE THESE PATHS FOR WHATEVER IS YOUR DIRECTORY WHERE 
 YOU STORE THE CREDENTIALS AND YOUR EMAIL
 """
-CREDENTIALS_FILE = "gmail_oauth_credentials.json"
-TOKEN_FILE = "/gmail_token.json"  # Will be created automatically
-YOUR_EMAIL = "@gmail.com"  # Your Gmail address
+CREDENTIALS_FILE = "/coen296project/backend/services/agents/email_agent/gmail_oauth_credentials.json"
+TOKEN_FILE = "/coen296/coen296project/backend/services/agents/email_agent/gmail_token.json"  # Will be created automatically
+YOUR_EMAIL = "redteambcoenai@gmail.com"  # Your Gmail address
 
 def create_test_email(to_email, subject="Test from GmailClient", body="Test body"):
     msg = MIMEMultipart()

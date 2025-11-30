@@ -29,23 +29,6 @@ class EmailAgent(BaseAgent):
             description="Sends email notifications for expense decisions and system events"
         )
         self._email_service = None
-    
-    # def _get_email_service(self):
-    #     """Lazy load email service to avoid circular imports"""
-    #     if self._email_service is None:
-    #         try:
-    #             # Try to import the full email service from app/email_agent
-    #             from app.email_agent.services.email_service import EmailService
-    #             from app.email_agent.gmail.gmail_client import GmailClient
-    #             # This would require Gmail setup - for now, use mock
-    #             logger.info("Gmail service not configured, using mock email service")
-    #             from infrastructure.email_client import send_email
-    #             self._email_service = {"send": send_email}
-    #         except ImportError:
-    #             # Fallback to simple mock
-    #             from infrastructure.email_client import send_email
-    #             self._email_service = {"send": send_email}
-    #     return self._email_service
 
     def _get_email_service(self):
         """Lazy load email service to avoid circular imports"""
@@ -57,8 +40,8 @@ class EmailAgent(BaseAgent):
                 # Get absolute path to token file
                 current_dir = os.path.dirname(os.path.abspath(__file__))
                 project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
-                token_path = os.path.join(project_root, 'app', 'email_agent', 'gmail_token.json')
-                
+                token_path = os.path.join(project_root, 'backend', 'gmail_token.json')
+                credentials_path = os.path.join(project_root, 'backend', 'gmail_oauth_credentials.json')
                 logger.info(f"[Gmail] Looking for token at: {token_path}")
                 logger.info(f"[Gmail] Token exists: {os.path.exists(token_path)}")
                 
@@ -66,19 +49,24 @@ class EmailAgent(BaseAgent):
                     # Use Gmail!
                     logger.info("🔧 Initializing Gmail service...")
                     
-                    # Add app directory to path temporarily
+                    # Add agents directory to path temporarily so `email_agent` package can be imported
                     import sys
-                    app_dir = os.path.join(project_root, 'app')
-                    if app_dir not in sys.path:
-                        sys.path.insert(0, app_dir)
-                    
+                    agents_dir = os.path.join(project_root, 'backend', 'services', 'agents')
+                    if agents_dir not in sys.path:
+                        logger.info(f"[Gmail] Adding agents_dir to sys.path: {agents_dir}")
+                        sys.path.insert(0, agents_dir)
+                    # Ensure project root is also available as a fallback (allows importing via `backend.*` if needed)
+                    if project_root not in sys.path:
+                        logger.info(f"[Gmail] Adding project_root to sys.path: {project_root}")
+                        sys.path.insert(0, project_root)
+
                     from email_agent.gmail.gmail_service_creator import GmailServiceCreator
                     from email_agent.gmail.gmail_client import GmailClient
                     from email_agent.services.email_service import EmailService
                     
                     # Create Gmail service
                     service = GmailServiceCreator.create_gmail_service(
-                        credentials_file='gmail_oauth_credentials.json',
+                        credentials_file=credentials_path,
                         token_file=token_path
                     )
                     
@@ -109,7 +97,7 @@ class EmailAgent(BaseAgent):
                     
             except Exception as e:
                 # Fallback to mock on any error
-                logger.error(f"Gmail initialization failed: {e}, using mock")
+                logger.error(f"Gmail initialization failed: {e}, using mock", exc_info=True)
                 from infrastructure.email_client import send_email
                 self._email_service = {"send": send_email}
     
