@@ -46,7 +46,7 @@ gcloud run deploy $SERVICE_NAME \
   --max-instances 10 \
   --cpu-boost \
   --no-cpu-throttling \
-  --set-env-vars="FIREBASE_PROJECT_ID=$PROJECT_ID,ENVIRONMENT=production,OPENAI_API_KEY=$OPENAI_API_KEY,FIREBASE_STORAGE_BUCKET=${PROJECT_ID}.appspot.com,USE_FIRESTORE_EMULATOR=false"
+  --set-env-vars="PROJECT_ID=$PROJECT_ID,FIREBASE_PROJECT_ID=$PROJECT_ID,ENVIRONMENT=production,OPENAI_API_KEY=$OPENAI_API_KEY,STORAGE_BUCKET=${PROJECT_ID}.firebasestorage.app,USE_FIRlse"OR=faE_EMULATESTOR
 
 echo ""
 echo "✅ Deployment complete!"

@@ -88,7 +88,7 @@ if os.getenv("ENVIRONMENT") == "production":
     allowed_origins = [
         "https://expensense-8110a.web.app",
         "https://expensense-8110a.firebaseapp.com",
-        "https://expense-back-855319526387.us-central1.run.app"
+        "https://expense-back--expensense-8110a.us-central1.hosted.app/"
     ]
 else:
     # Development: allow all origins

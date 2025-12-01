@@ -46,7 +46,7 @@ wheels/
 lib/
 lib64/
 # But allow frontend lib directory
-!frontend/lib/
+!app/frontend/lib/
 
 # Secrets and local configurations
 *.env
@@ -57,7 +57,7 @@ gmail_token.json
 oauth_request.py
 
 # Uploaded files (receipts, documents)
-backend/uploads/
+app/backend/uploads/
 
 # Pytest
 .pytest_cache/
@@ -80,6 +80,6 @@ yarn-debug.log*
 yarn-error.log*
 
 gen/
-/backend/expensense-8110a-firebase-adminsdk-fbsvc-e542a903fb.json
+/app/backend/expensense-8110a-firebase-adminsdk-fbsvc-e542a903fb.json
 /.chroma_store/
-/backend/.chroma_store/
+/app/backend/.chroma_store/
