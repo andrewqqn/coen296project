@@ -83,22 +83,21 @@ app = FastAPI(
 )
 
 # Configure CORS
-allowed_origins = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "https://expensense-8110a.web.app",
-    "https://expensense-8110a.firebaseapp.com",
-    "https://expense-back-855319526387.us-central1.run.app"
-]
-
-# Allow any origin in development
-if os.getenv("ENVIRONMENT") != "production":
-    allowed_origins.append("*")
+if os.getenv("ENVIRONMENT") == "production":
+    # Production: specific origins only
+    allowed_origins = [
+        "https://expensense-8110a.web.app",
+        "https://expensense-8110a.firebaseapp.com",
+        "https://expense-back-855319526387.us-central1.run.app"
+    ]
+else:
+    # Development: allow all origins
+    allowed_origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=True,
+    allow_credentials=True if os.getenv("ENVIRONMENT") == "production" else False,
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all headers
 )
