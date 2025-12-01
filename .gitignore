@@ -83,3 +83,5 @@ gen/
 /backend/expensense-8110a-firebase-adminsdk-fbsvc-e542a903fb.json
 /.chroma_store/
 /backend/.chroma_store/
+
+app/backend/expensense-8110a-firebase-adminsdk-fbsvc-e542a903fb.json
