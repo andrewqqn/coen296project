@@ -172,13 +172,19 @@ class DocumentAgent(BaseAgent):
     async def _extract_receipt_info(self, file_path: str, extract_fields: list) -> Dict[str, Any]:
         """Extract structured information from a receipt"""
         try:
+            logger.info(f"[EXTRACT] Starting receipt extraction for: {file_path}")
+            
             # Read PDF file
+            logger.info(f"[EXTRACT] Reading file...")
             pdf_bytes = self._read_file(file_path)
+            logger.info(f"[EXTRACT] File read successfully, size: {len(pdf_bytes)} bytes")
             
             # Convert to images
+            logger.info(f"[EXTRACT] Converting PDF to images...")
             pages = convert_from_bytes(pdf_bytes, dpi=100)
             if not pages:
                 raise ValueError("PDF converted to zero pages")
+            logger.info(f"[EXTRACT] Converted to {len(pages)} page(s)")
             
             # Convert first page to base64
             img = pages[0]
@@ -226,11 +232,14 @@ Return ONLY a valid JSON object with these keys. Do not include markdown or code
             return extracted_info
             
         except Exception as e:
-            logger.error(f"Error extracting receipt info: {str(e)}", exc_info=True)
+            error_msg = f"Failed to extract receipt info: {str(e)}"
+            logger.error(f"[EXTRACT ERROR] {error_msg}", exc_info=True)
+            logger.error(f"[EXTRACT ERROR] Error type: {type(e).__name__}")
+            logger.error(f"[EXTRACT ERROR] File path was: {file_path}")
             # Return error dict instead of raising
             return {
                 "success": False,
-                "error": f"Failed to extract receipt info: {str(e)}"
+                "error": error_msg
             }
     
     async def _convert_pdf_to_images(self, file_path: str, dpi: int) -> Dict[str, Any]:
@@ -292,8 +301,83 @@ Return ONLY a valid JSON object with these keys. Do not include markdown or code
                 logger.info(f"Successfully read {len(data)} bytes")
                 return data
         else:
-            # TODO: Implement remote file download
-            raise NotImplementedError("Remote file download not yet implemented")
+            # Remote file (Firebase Storage URL or gs:// path)
+            logger.info(f"[DOWNLOAD] Downloading remote file: {file_path}")
+            
+            try:
+                from infrastructure.firebase_client import get_storage_bucket
+                
+                # Extract blob name from URL or gs:// path
+                blob_name = None
+                
+                if file_path.startswith("gs://"):
+                    # Format: gs://bucket-name/path/to/file
+                    logger.info(f"[DOWNLOAD] Parsing gs:// URL")
+                    parts = file_path.replace("gs://", "").split("/", 1)
+                    if len(parts) == 2:
+                        blob_name = parts[1]
+                elif "storage.googleapis.com" in file_path or "firebasestorage.app" in file_path:
+                    # Format: https://storage.googleapis.com/bucket-name/path/to/file
+                    # or https://firebasestorage.googleapis.com/v0/b/bucket-name/o/path%2Fto%2Ffile
+                    if "firebasestorage.googleapis.com" in file_path and "/o/" in file_path:
+                        # Parse Firebase Storage API URL
+                        logger.info(f"[DOWNLOAD] Parsing Firebase Storage API URL")
+                        import urllib.parse
+                        encoded_path = file_path.split("/o/")[1].split("?")[0]
+                        blob_name = urllib.parse.unquote(encoded_path)
+                        logger.info(f"[DOWNLOAD] Decoded path: {blob_name}")
+                    else:
+                        # Parse direct GCS URL (works for both storage.googleapis.com and firebasestorage.app)
+                        logger.info(f"[DOWNLOAD] Parsing direct storage URL")
+                        # Extract everything after the bucket name
+                        # Format: https://storage.googleapis.com/bucket-name/path/to/file
+                        if ".googleapis.com/" in file_path:
+                            after_domain = file_path.split(".googleapis.com/")[1]
+                        elif ".firebasestorage.app/" in file_path:
+                            after_domain = file_path.split(".firebasestorage.app/")[1]
+                        else:
+                            raise ValueError(f"Unexpected URL format: {file_path}")
+                        
+                        # Split to get path after bucket name
+                        parts = after_domain.split("/", 1)
+                        if len(parts) == 2:
+                            blob_name = parts[1]
+                        else:
+                            # Entire thing might be the blob name
+                            blob_name = after_domain
+                        logger.info(f"[DOWNLOAD] Extracted blob path: {blob_name}")
+                else:
+                    # Assume it's already a blob path
+                    logger.info(f"[DOWNLOAD] Treating as direct blob path")
+                    blob_name = file_path
+                
+                if not blob_name:
+                    raise ValueError(f"Could not extract blob name from path: {file_path}")
+                
+                logger.info(f"[DOWNLOAD] Extracted blob name: {blob_name}")
+                
+                # Download from Firebase Storage
+                logger.info(f"[DOWNLOAD] Getting storage bucket...")
+                bucket = get_storage_bucket()
+                logger.info(f"[DOWNLOAD] Bucket obtained: {bucket.name}")
+                
+                blob = bucket.blob(blob_name)
+                logger.info(f"[DOWNLOAD] Checking if blob exists...")
+                
+                if not blob.exists():
+                    raise FileNotFoundError(f"File not found in storage: {blob_name}")
+                
+                logger.info(f"[DOWNLOAD] Blob exists, downloading...")
+                data = blob.download_as_bytes()
+                logger.info(f"[DOWNLOAD] Successfully downloaded {len(data)} bytes from storage")
+                return data
+                
+            except Exception as e:
+                error_msg = f"Failed to download remote file: {str(e)}"
+                logger.error(f"[DOWNLOAD ERROR] {error_msg}", exc_info=True)
+                logger.error(f"[DOWNLOAD ERROR] Error type: {type(e).__name__}")
+                logger.error(f"[DOWNLOAD ERROR] Original path: {file_path}")
+                raise RuntimeError(error_msg)
 
 
 # Legacy function for backward compatibility
