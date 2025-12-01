@@ -1,0 +1,60 @@
+# This file specifies files that are *not* uploaded to Google Cloud
+# using gcloud. It follows the same syntax as .gitignore.
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv/
+ENV/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+test_*.py
+tests/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Runtime data
+.chroma_store/
+uploads/
+static/
+
+# Documentation
+*.md
+examples/
+
+# Deployment scripts
+deploy.sh
+*.sh
+
+# Environment files - keep .env for local but exclude others
+.env.local
+.env.*.local
+
+# Firebase
+firebase-debug.log
+firestore-debug.log
+emulator-credentials.json
+
+# Git
+.git/
+.gitignore
+
+# OS
+.DS_Store
