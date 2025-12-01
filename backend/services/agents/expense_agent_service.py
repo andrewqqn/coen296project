@@ -155,11 +155,11 @@ def apply_static_rules(expense, receipt_summary):
         return "R4", "REJECT"
 
     # R3 – >$500, always MANUAL
-    if amount > 500:
+    if amount >= 500:
         return "R3", "MANUAL"
 
     # R2 – already submitted today → MANUAL
-    if amount <= 500 and len(today_exp) > 1:
+    if amount <= 500 and len(today_exp) >= 1:
         return "R2", "MANUAL"
 
     # R1 – safe approve
