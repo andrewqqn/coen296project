@@ -1,0 +1,30 @@
+# Local environment configs
+.env
+.env.*
+*.env
+
+# Firebase / emulator
+firebase.json
+firestore.rules
+firestore.indexes.json
+google-services.json
+*emulator*
+*local*
+
+# Node / build artifacts
+node_modules
+dist
+build
+
+# IDE / OS files
+.vscode
+.idea
+.DS_Store
+__pycache__
+
+# Git
+.git
+.gitignore
+
+# log
+*.log
