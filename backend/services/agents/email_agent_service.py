@@ -40,8 +40,8 @@ class EmailAgent(BaseAgent):
                 # Get absolute path to token file
                 current_dir = os.path.dirname(os.path.abspath(__file__))
                 project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
-                token_path = os.path.join(project_root, 'backend', 'gmail_token.json')
-                credentials_path = os.path.join(project_root, 'backend', 'gmail_oauth_credentials.json')
+                token_path = os.path.join(project_root, 'app', 'gmail_token.json')
+                credentials_path = os.path.join(project_root, 'app', 'gmail_oauth_credentials.json')
                 logger.info(f"[Gmail] Looking for token at: {token_path}")
                 logger.info(f"[Gmail] Token exists: {os.path.exists(token_path)}")
                 
@@ -51,7 +51,7 @@ class EmailAgent(BaseAgent):
                     
                     # Add agents directory to path temporarily so `email_agent` package can be imported
                     import sys
-                    agents_dir = os.path.join(project_root, 'backend', 'services', 'agents')
+                    agents_dir = os.path.join(project_root, 'app', 'services', 'agents')
                     if agents_dir not in sys.path:
                         logger.info(f"[Gmail] Adding agents_dir to sys.path: {agents_dir}")
                         sys.path.insert(0, agents_dir)
