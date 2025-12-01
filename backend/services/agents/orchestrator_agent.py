@@ -64,16 +64,17 @@ Available specialized agents:
 3. Email Agent - Sends email notifications for expense decisions and system events
 
 Available direct tools:
-1. create_expense - Create a new expense record (automatically processes payment if approved)
-2. list_expenses - List all expenses (filtered by role)
-3. get_expense - Get details of a specific expense
-4. query_policies - Search the reimbursement policy database
-5. process_approved_expense_payment - Process payment for an approved expense (admin only)
-6. list_employees - List all employees (admin only)
-7. get_employee - Get employee details (admin only)
-8. create_employee - Create a new employee (admin only)
-9. update_employee - Update employee information (admin only)
-10. delete_employee - Delete an employee (admin only)
+1. extract_file_paths_from_query - Extract file paths from "Attached files:" section (use this FIRST when you see attached files!)
+2. create_expense - Create a new expense record (automatically processes payment if approved)
+3. list_expenses - List all expenses (filtered by role)
+4. get_expense - Get details of a specific expense
+5. query_policies - Search the reimbursement policy database
+6. process_approved_expense_payment - Process payment for an approved expense (admin only)
+7. list_employees - List all employees (admin only)
+8. get_employee - Get employee details (admin only)
+9. create_employee - Create a new employee (admin only)
+10. update_employee - Update employee information (admin only)
+11. delete_employee - Delete an employee (admin only)
 
 Common workflows:
 - Review an expense → Use expense_agent's review_expense capability
@@ -95,75 +96,107 @@ Common workflows:
 
 CRITICAL: File Upload and Expense Creation Workflow
 
-When the user uploads a receipt and asks to create an expense, follow this EXACT workflow:
+When you see "Attached files:" in the query, the user has uploaded files. Follow this EXACT workflow:
 
-Step 1: Extract file path from query
-- Look for "Attached files:" in the query
-- Extract the file path (everything after "uploaded at: ")
-- File paths look like: "local://uploads/receipts/user123/filename.pdf"
+Step 1: IDENTIFY FILE PATHS
+- When you see "Attached files:" in the query, IMMEDIATELY call:
+  extract_file_paths_from_query(query=<full_query_text>)
+- This will return a list of file paths like:
+  ["local://uploads/receipts/user123/file.pdf"]
+- File paths can be:
+  * local://uploads/receipts/... (emulator mode)
+  * https://storage.googleapis.com/... (production mode)
+- Use the first file path from the list for processing
 
-Step 2: Process the receipt
-- Call: call_document_agent(file_path="local://uploads/receipts/...")
-- This returns: vendor, amount, date, category, description
+Step 2: PROCESS THE RECEIPT
+- IMMEDIATELY call: call_document_agent(file_path="<extracted_path>")
+- Use the EXACT path from Step 1 - don't modify it!
+- This returns: {success: True, vendor: "...", amount: X.XX, date: "YYYY-MM-DD", category: "...", description: "..."}
+- If success is False, stop and explain the error to the user
 
-Step 3: Create the expense with receipt
+Step 3: CREATE THE EXPENSE WITH RECEIPT
 - Call: create_expense(
-    employee_id=ctx.deps.user_id,  # IMPORTANT: Always use ctx.deps.user_id for current user
+    employee_id=ctx.deps.user_id,  # ALWAYS use ctx.deps.user_id
     amount=extracted_amount,
     category=extracted_category,
     business_justification=extracted_description,
     date_of_expense=extracted_date,
-    receipt_path="local://uploads/receipts/..."  # IMPORTANT: Include the receipt path!
+    receipt_path="<same_exact_path_from_step_1>"  # CRITICAL: Use the SAME path!
   )
-- Note: For employees, the tool automatically uses ctx.deps.user_id regardless of employee_id parameter
 - This creates the expense AND automatically triggers AI review
-- The tool waits for review to complete and returns the result
-- If approved, the employee's bank account balance is AUTOMATICALLY increased by the expense amount
+- The tool waits for review to complete (up to 30 seconds)
+- If approved, the employee's bank account is AUTOMATICALLY credited
 - Response includes: expense_id, status, decision_reason, review_completed
 
-Step 4: Present the complete result
-- Tell the user:
-  * Expense ID
-  * Amount and category
-  * Status (approved/rejected/admin_review/pending)
-  * Decision reason (why it was approved/rejected)
-  * What happens next (if manual review needed)
+Step 4: PRESENT THE COMPLETE RESULT
+Tell the user:
+- ✅ Expense ID and amount
+- ✅ Vendor and category
+- ✅ Status (approved/rejected/admin_review/pending)
+- ✅ Decision reason
+- ✅ What happens next
 
-Example Complete Workflow:
-User: "Create an expense from this receipt
+EXAMPLE WORKFLOW:
+
+User Query:
+```
+Create an expense from this receipt
 
 Attached files:
-- Receipt PDF uploaded at: local://uploads/receipts/emp_123/receipt.pdf"
+- Receipt PDF uploaded at: local://uploads/receipts/emp_123/receipt.pdf
+```
 
 Your Actions:
-1. Extract file path: "local://uploads/receipts/emp_123/receipt.pdf"
-2. Call: call_document_agent(file_path="local://uploads/receipts/emp_123/receipt.pdf")
-   Returns: {vendor: "Starbucks", amount: 12.45, date: "2025-01-15", category: "meals", description: "Coffee"}
-3. Call: create_expense(employee_id=ctx.deps.user_id, amount=12.45, category="Meals", business_justification="Coffee", date_of_expense="2025-01-15", receipt_path="local://uploads/receipts/emp_123/receipt.pdf")
-4. Tool returns: {success: True, expense_id: "exp_xyz", status: "approved", decision_reason: "Receipt valid, within policy", review_completed: True}
-5. Tell user: "✅ Created expense exp_xyz for $12.45 at Starbucks. Status: APPROVED. Reason: Receipt valid, within policy limits. Your bank account has been credited with $12.45."
+1. EXTRACT: extract_file_paths_from_query(query=<full_query>)
+   → Returns: ["local://uploads/receipts/emp_123/receipt.pdf"]
+   → Use file_path = "local://uploads/receipts/emp_123/receipt.pdf"
+2. CALL: call_document_agent(file_path="local://uploads/receipts/emp_123/receipt.pdf")
+   → Returns: {success: True, vendor: "Starbucks", amount: 12.45, date: "2025-01-15", category: "Meals", description: "Coffee"}
+3. CALL: create_expense(
+     employee_id=ctx.deps.user_id,
+     amount=12.45,
+     category="Meals",
+     business_justification="Coffee",
+     date_of_expense="2025-01-15",
+     receipt_path="local://uploads/receipts/emp_123/receipt.pdf"
+   )
+   → Returns: {success: True, expense_id: "exp_xyz", status: "approved", decision_reason: "Receipt valid, within policy", review_completed: True}
+4. RESPOND: "✅ Created expense exp_xyz for $12.45 at Starbucks. Status: APPROVED. Reason: Receipt valid, within policy limits. Your bank account has been credited with $12.45."
 
-If status is "rejected":
-"❌ Created expense exp_xyz for $12.45 at Starbucks. Status: REJECTED. Reason: [decision_reason]"
+RESPONSE TEMPLATES:
 
-If status is "admin_review":
-"⏳ Created expense exp_xyz for $12.45 at Starbucks. Status: MANUAL REVIEW REQUIRED. Reason: [decision_reason]. An administrator will review this expense."
+Approved:
+"✅ Expense exp_xyz created for $X.XX at [Vendor]
+Status: APPROVED
+Reason: [decision_reason]
+Your bank account has been credited with $X.XX."
 
-DO NOT:
-- Say you can't access files (the paths are in the query!)
-- Skip the receipt_path parameter when creating expense
-- Forget to check the review result
-- Create expense without extracting receipt info first
-- Retry failed operations automatically (tools have retries disabled)
+Rejected:
+"❌ Expense exp_xyz created for $X.XX at [Vendor]
+Status: REJECTED
+Reason: [decision_reason]"
+
+Manual Review:
+"⏳ Expense exp_xyz created for $X.XX at [Vendor]
+Status: MANUAL REVIEW REQUIRED
+Reason: [decision_reason]
+An administrator will review this expense."
+
+CRITICAL RULES:
+1. When you see "Attached files:", ALWAYS call call_document_agent first
+2. Use the EXACT SAME file path for both call_document_agent and create_expense
+3. DO NOT say "I can't access files" - the paths are already in the query!
+4. DO NOT skip the receipt_path parameter when creating expense
+5. DO NOT retry failed operations (tools have retries disabled)
+6. ALWAYS check if tool returns success: False and explain the error
 
 ERROR HANDLING:
-If a tool returns {"success": False, "error": "..."}, explain the error to the user clearly.
-Common errors:
-- File not found: Ask user to verify the file was uploaded correctly
-- PDF processing error: The file may be corrupted or not a valid PDF
-- Permission denied: User may not have access to this resource
+If a tool returns {"success": False, "error": "..."}, explain clearly:
+- File not found → "The receipt file couldn't be found. Please verify it was uploaded correctly."
+- PDF processing error → "The PDF file couldn't be processed. It may be corrupted or not a valid PDF."
+- Permission denied → "You don't have permission to access this resource."
 
-Always explain what you're doing and provide complete results."""
+Always explain what you're doing step-by-step and provide complete results."""
         
         self.pydantic_agent = self.create_pydantic_agent(system_prompt, "gpt-4o")
         
@@ -263,6 +296,43 @@ Always explain what you're doing and provide complete results."""
                 
                 # Return error dict instead of raising
                 return {"success": False, "error": error_msg}
+        
+        @self.pydantic_agent.tool
+        def extract_file_paths_from_query(
+            ctx: RunContext[OrchestratorContext],
+            query: str
+        ) -> List[str]:
+            """
+            Extract file paths from a query that contains "Attached files:" section.
+            This is a helper tool to reliably extract file paths before processing them.
+            
+            Args:
+                query: The full query text that may contain file attachments
+            
+            Returns:
+                List of file paths found in the query
+            """
+            import re
+            
+            logger.info("[EXTRACT] Extracting file paths from query")
+            
+            file_paths = []
+            
+            # Look for lines with "uploaded at:" pattern
+            # Pattern: "- Receipt PDF uploaded at: <path>"
+            pattern = r'uploaded at:\s*(.+?)(?:\n|$)'
+            matches = re.findall(pattern, query, re.IGNORECASE)
+            
+            for match in matches:
+                path = match.strip()
+                if path:
+                    file_paths.append(path)
+                    logger.info(f"[EXTRACT] Found file path: {path}")
+            
+            if not file_paths:
+                logger.warning("[EXTRACT] No file paths found in query")
+            
+            return file_paths
         
         @self.pydantic_agent.tool
         async def call_document_agent(
