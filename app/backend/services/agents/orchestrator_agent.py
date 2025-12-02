@@ -1203,11 +1203,28 @@ Always explain what you're doing step-by-step and provide complete results."""
         query: str,
         user_id: str,
         role: str = "employee",
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        message_history: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
-        Convenience method to process a user query
+        Convenience method to process a user query with optional conversation history
+        
+        Args:
+            query: The user's query
+            user_id: The user's ID
+            role: The user's role (employee or admin)
+            session_id: Optional session ID
+            message_history: Optional list of previous messages in format:
+                [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
         """
+        from pydantic_ai.messages import (
+            ModelMessage,
+            ModelRequest,
+            ModelResponse,
+            UserPromptPart,
+            TextPart
+        )
+        
         context = OrchestratorContext(
             user_id=user_id,
             role=role,
@@ -1215,7 +1232,24 @@ Always explain what you're doing step-by-step and provide complete results."""
         )
         
         try:
-            result = await self.pydantic_agent.run(query, deps=context)
+            # Convert message history to Pydantic AI's ModelMessage format
+            pydantic_history: List[ModelMessage] = []
+            if message_history:
+                for msg in message_history:
+                    msg_role = msg.get("role", "user")
+                    content = msg.get("content", "")
+                    
+                    if msg_role == "user":
+                        pydantic_history.append(ModelRequest(parts=[UserPromptPart(content=content)]))
+                    elif msg_role == "assistant":
+                        pydantic_history.append(ModelResponse(parts=[TextPart(content=content)]))
+            
+            # Run the agent with conversation history if available
+            if pydantic_history:
+                logger.info(f"Running agent with {len(pydantic_history)} previous messages")
+                result = await self.pydantic_agent.run(query, message_history=pydantic_history, deps=context)
+            else:
+                result = await self.pydantic_agent.run(query, deps=context)
             
             # Extract agents used
             agents_used = set()

@@ -118,7 +118,8 @@ async def process_query_with_agents(
         result = await orchestrator_agent.process_query(
             query=query,
             user_id=employee_id,
-            role=role
+            role=role,
+            message_history=message_history
         )
         
         logger.info(f"Query processed. Agents used: {result.get('agents_used', [])}")
