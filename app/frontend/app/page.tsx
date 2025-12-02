@@ -97,12 +97,12 @@ export default function Home() {
                 {/* White glow burst behind the panel */}
                 <div className="absolute inset-0 -z-10 overflow-hidden rounded-lg">
                   <div className="absolute left-1/2 top-1/2 h-28 w-48 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/20 blur-3xl" />
-                  <div className="absolute left-1/2 top-1/2 h-20 w-36 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/30 blur-2xl" />
+                  <div className="absolute left-1/2 top-1/2 h-20 w-36 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/25 blur-2xl" />
                 </div>
                 
                 {/* Frosted glass panel */}
-                <div className="rounded-lg backdrop-blur-md bg-background/50 border border-white/20 px-4 py-2 shadow-lg shadow-white/10">
-                  <h2 className="text-xl font-semibold">ExpenSense</h2>
+                <div className="rounded-md backdrop-blur-md bg-background/50 border border-white/20 px-4 py-2 shadow-lg shadow-white/10">
+                  <h2 className="text-2xl font-regular" style={{ fontFamily: 'var(--font-radley)' }}>ExpenSense</h2>
                 </div>
               </div>
               
@@ -179,7 +179,7 @@ export default function Home() {
           >
             <Menu className="h-5 w-5" />
           </Button>
-          <h2 className="text-lg font-semibold">ExpenSense</h2>
+          <h2 className="text-lg font-semibold" style={{ fontFamily: 'var(--font-radley)' }}>ExpenSense</h2>
         </header>
 
         {/* Content area */}

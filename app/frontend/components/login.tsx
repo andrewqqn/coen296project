@@ -183,11 +183,6 @@ export function Login({ onLoginSuccess }: LoginProps) {
             : "Don't have an account? Sign up"}
         </button>
       </div>
-
-      <div className="pt-4 border-t text-center text-xs text-muted-foreground">
-        <p>🔧 Using Firebase Auth Emulator</p>
-        <p className="mt-1">Any email/password will work for testing</p>
-      </div>
     </div>
   );
 }
