@@ -69,12 +69,13 @@ Available direct tools:
 3. list_expenses - List all expenses (filtered by role)
 4. get_expense - Get details of a specific expense
 5. query_policies - Search the reimbursement policy database
-6. process_approved_expense_payment - Process payment for an approved expense (admin only)
-7. list_employees - List all employees (admin only)
-8. get_employee - Get employee details (admin only)
-9. create_employee - Create a new employee (admin only)
-10. update_employee - Update employee information (admin only)
-11. delete_employee - Delete an employee (admin only)
+6. get_current_user_info - Get current user's info including email (use this to get user's email for sending emails!)
+7. process_approved_expense_payment - Process payment for an approved expense (admin only)
+8. list_employees - List all employees (admin only)
+9. get_employee - Get employee details by ID (admin only)
+10. create_employee - Create a new employee (admin only)
+11. update_employee - Update employee information (admin only)
+12. delete_employee - Delete an employee (admin only)
 
 Common workflows:
 - Review an expense → Use expense_agent's review_expense capability
@@ -85,8 +86,28 @@ Common workflows:
   3. The system will automatically trigger AI review after creation
   4. Use get_expense to check the review result
 - Send email notification → Use call_email_agent with send_expense_notification or send_email capability
-  * send_expense_notification: For expense decision notifications (requires: to, expense_id, status, amount)
-  * send_email: For generic emails (requires: to, subject, body)
+  CRITICAL: The parameters argument MUST be a dictionary. DO NOT pass to/subject/body as separate arguments!
+  
+  IMPORTANT: To get the user's email address:
+  1. If sending to current user: Call get_current_user_info() to get their email
+  2. If sending to another user (admin only): Call get_employee(employee_id=<target_employee_id>) to get their email
+  3. Use the returned email address in the "to" field
+  
+  * send_expense_notification: 
+    Step 1: user_info = get_current_user_info()
+    Step 2: call_email_agent(
+      capability="send_expense_notification",
+      parameters={"to": user_info["email"], "expense_id": "exp_123", "status": "approved", "amount": 100.0}
+    )
+  * send_email:
+    Step 1: user_info = get_current_user_info()
+    Step 2: call_email_agent(
+      capability="send_email",
+      parameters={"to": user_info["email"], "subject": "Subject Here", "body": "Body text here"}
+    )
+  WRONG: call_email_agent(capability="send_email", to="...", subject="...", body="...")
+  WRONG: Using placeholder emails like "your-email@example.com"
+  RIGHT: Get real email with get_current_user_info() then call_email_agent(capability="send_email", parameters={"to": user_info["email"], "subject": "...", "body": "..."})
 - List expenses → Use list_expenses tool
 - Query policies → Use query_policies tool (e.g., "meal limits", "travel policy", "receipt requirements")
   * For policy questions, ALWAYS use query_policies to get accurate information from the policy database
@@ -519,6 +540,29 @@ Always explain what you're doing step-by-step and provide complete results."""
                 return {"error": str(e)}
         
         @self.pydantic_agent.tool
+        @require_role("employee", "admin")
+        def get_current_user_info(ctx: RunContext[OrchestratorContext]) -> Dict[str, Any]:
+            """
+            Get the current user's employee information including their email address.
+            This is useful when you need to send an email to the current user.
+            
+            Returns:
+                Current user's employee details including email, name, department, etc.
+            """
+            from services import employee_service
+            
+            logger.info(f"User {ctx.deps.user_id} getting their own info")
+            
+            try:
+                employee = employee_service.get_employee(ctx.deps.user_id)
+                if not employee:
+                    return {"error": "Employee record not found"}
+                return employee
+            except Exception as e:
+                logger.error(f"Error getting current user info: {str(e)}", exc_info=True)
+                return {"error": str(e)}
+        
+        @self.pydantic_agent.tool
         @require_role("admin")
         def create_employee(
             ctx: RunContext[OrchestratorContext],
@@ -688,9 +732,24 @@ Always explain what you're doing step-by-step and provide complete results."""
             """
             Call the Email Agent to send notifications or manage email communication.
             
+            IMPORTANT: The 'parameters' argument must be a dictionary containing the email details.
+            DO NOT pass email fields (to, subject, body) as separate arguments!
+            
             Args:
                 capability: The capability to invoke (send_expense_notification, send_email, search_emails)
-                parameters: Parameters for the capability
+                parameters: Dictionary containing the parameters for the capability.
+                    For send_email: {"to": "email@example.com", "subject": "...", "body": "..."}
+                    For send_expense_notification: {"to": "email@example.com", "expense_id": "...", "status": "...", "amount": 100.0}
+            
+            Example usage:
+                call_email_agent(
+                    capability="send_email",
+                    parameters={
+                        "to": "user@example.com",
+                        "subject": "Test Subject",
+                        "body": "Test Body"
+                    }
+                )
             
             Returns:
                 Dictionary with email operation results. Always returns a dict, never raises exceptions.
@@ -872,7 +931,11 @@ Always explain what you're doing step-by-step and provide complete results."""
             if ctx.deps.role == "employee":
                 employee_id = ctx.deps.user_id
             
-            logger.info(f"Creating expense for {employee_id}: ${amount} - {category}")
+            # Normalize category to proper case (capitalize first letter)
+            # Valid categories: Travel, Meals, Conference, Other
+            category_normalized = category.strip().capitalize()
+            
+            logger.info(f"Creating expense for {employee_id}: ${amount} - {category_normalized}")
             
             try:
                 # Parse date
@@ -885,7 +948,7 @@ Always explain what you're doing step-by-step and provide complete results."""
                 expense_create = ExpenseCreate(
                     employee_id=employee_id,
                     amount=amount,
-                    category=category,
+                    category=category_normalized,
                     business_justification=business_justification,
                     date_of_expense=expense_date
                 )

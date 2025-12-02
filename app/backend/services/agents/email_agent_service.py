@@ -40,8 +40,8 @@ class EmailAgent(BaseAgent):
                 # Get absolute path to token file
                 current_dir = os.path.dirname(os.path.abspath(__file__))
                 project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
-                token_path = os.path.join(project_root, 'app', 'gmail_token.json')
-                credentials_path = os.path.join(project_root, 'app', 'gmail_oauth_credentials.json')
+                token_path = os.path.join(project_root, 'gmail_token.json')
+                credentials_path = os.path.join(project_root, 'gmail_oauth_credentials.json')
                 logger.info(f"[Gmail] Looking for token at: {token_path}")
                 logger.info(f"[Gmail] Token exists: {os.path.exists(token_path)}")
                 
@@ -60,9 +60,9 @@ class EmailAgent(BaseAgent):
                         logger.info(f"[Gmail] Adding project_root to sys.path: {project_root}")
                         sys.path.insert(0, project_root)
 
-                    from email_agent.gmail.gmail_service_creator import GmailServiceCreator
-                    from email_agent.gmail.gmail_client import GmailClient
-                    from email_agent.services.email_service import EmailService
+                    from services.agents.email_agent.gmail.gmail_service_creator import GmailServiceCreator
+                    from services.agents.email_agent.gmail.gmail_client import GmailClient
+                    from services.agents.email_agent.services.email_service import EmailService
                     
                     # Create Gmail service
                     service = GmailServiceCreator.create_gmail_service(
